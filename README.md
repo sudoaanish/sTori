@@ -10,7 +10,7 @@ sTori turns a Windows PC into a private ebook library server. Read on the deskto
 
 <p>
   <a href="https://github.com/sudoaanish/sTori/releases">
-    <img src="https://img.shields.io/badge/Version-v0.1.1%20Preview-34206B?style=for-the-badge&logo=github" alt="sTori v0.1.1 preview" />
+    <img src="https://img.shields.io/badge/Version-v0.1.2%20Preview-34206B?style=for-the-badge&logo=github" alt="sTori v0.1.2 preview" />
   </a>
   <a href="https://github.com/sudoaanish/sTori/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/sudoaanish/sTori?style=for-the-badge" alt="MIT license" />
@@ -65,7 +65,7 @@ Configured source libraries are treated as read-only. Downloads managed by sTori
 2. Download the Windows installer named similar to:
 
    ```text
-   sTori_0.1.1_x64-setup.exe
+   sTori_0.1.2_x64-setup.exe
    ```
 
 3. Run the installer and follow the Windows prompts.

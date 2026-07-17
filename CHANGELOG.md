@@ -2,6 +2,10 @@
 
 All notable changes to sTori will be documented here.
 
+## 0.1.2 - PWA serving hotfix
+
+- Fixed the packaged Windows server locating its bundled web assets after NSIS installation. iPhone and browser readers now receive the app shell instead of a blank page.
+
 ## 0.1.1 - Desktop continuity and signed updates
 
 - Added signed in-app update checks and installation from GitHub Releases.

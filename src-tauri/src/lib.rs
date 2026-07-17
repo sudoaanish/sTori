@@ -6,7 +6,11 @@ mod scanner;
 mod server;
 
 use std::path::PathBuf;
-use tauri::Manager;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, WindowEvent,
+};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,6 +29,8 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let data_dir = std::env::var_os("STORI_DATA_DIR").map(PathBuf::from).unwrap_or(app.path().app_data_dir()?);
             let database =
@@ -58,10 +64,126 @@ pub fn run() {
                     tracing::error!("sTori server stopped: {error}");
                 }
             });
+            let show_item = MenuItem::with_id(app, "show", "Show sTori", true, None::<&str>)?;
+            let hide_item = MenuItem::with_id(app, "hide", "Hide to system tray", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit sTori", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &hide_item, &quit_item])?;
+            let tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().ok_or("sTori tray icon is unavailable")?.clone())
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .tooltip("sTori — your personal reading room")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main_window(app),
+                    "hide" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.hide();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            app.manage(tray);
+            if std::env::args().any(|argument| argument == "--minimized") {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
             Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![get_autostart, set_autostart])
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running sTori");
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+#[tauri::command]
+fn get_autostart() -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        let output = std::process::Command::new("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                "/v",
+                "sTori",
+            ])
+            .output()
+            .map_err(|error| format!("Could not read the Windows startup setting: {error}"))?;
+        Ok(output.status.success())
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let status = if enabled {
+            let executable = std::env::current_exe()
+                .map_err(|error| format!("Could not locate sTori: {error}"))?;
+            std::process::Command::new("reg")
+                .args([
+                    "add",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                    "/v",
+                    "sTori",
+                    "/t",
+                    "REG_SZ",
+                    "/d",
+                    &format!("\"{}\" --minimized", executable.display()),
+                    "/f",
+                ])
+                .status()
+        } else {
+            std::process::Command::new("reg")
+                .args([
+                    "delete",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                    "/v",
+                    "sTori",
+                    "/f",
+                ])
+                .status()
+        }
+        .map_err(|error| format!("Could not change the Windows startup setting: {error}"))?;
+        if enabled && !status.success() {
+            return Err("Windows did not accept the startup setting.".into());
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = enabled;
+        Err("Start with Windows is only available on Windows.".into())
+    }
 }
 
 #[cfg(windows)]

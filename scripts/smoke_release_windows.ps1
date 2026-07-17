@@ -46,7 +46,7 @@ try {
     $libraries = Invoke-RestMethod "http://127.0.0.1:1822/api/admin/libraries"
     $manifestResponse = Invoke-WebRequest "http://127.0.0.1:1822/manifest.webmanifest" -UseBasicParsing
     if ($diagnostics.database_status -ne "ok") { throw "Release database integrity check failed." }
-    if ([int]$diagnostics.schema_version -ne 3) { throw "Unexpected release schema version: $($diagnostics.schema_version)" }
+    if ([int]$diagnostics.schema_version -ne 4) { throw "Unexpected release schema version: $($diagnostics.schema_version)" }
     if (-not (Test-Path -LiteralPath (Join-Path $data "stori.db"))) { throw "First-run database was not created in the isolated data directory." }
     if ($manifestResponse.StatusCode -ne 200) { throw "Packaged PWA manifest was not served." }
 

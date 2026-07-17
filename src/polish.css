@@ -655,6 +655,22 @@ body,
   --raised2: #414148;
   --muted: #b9b9c1;
   --line: rgba(255, 255, 255, 0.12);
+  --indigo: #8c8aff;
+  --lavender: #c1c0ff;
+}
+
+.themed-logo { display: inline-flex; align-items: center; }
+.themed-logo .logo-dark { display: none; }
+[data-theme="dark"] .themed-logo .logo-light { display: none; }
+[data-theme="dark"] .themed-logo .logo-dark { display: block; }
+[data-theme="dark"] .eyebrow,
+[data-theme="dark"] .feature-card .eyebrow,
+[data-theme="dark"] .collection-banner .eyebrow,
+[data-theme="dark"] .download-notice .eyebrow,
+[data-theme="dark"] .catalog-card .eyebrow {
+  color: #d0ceff;
+  background: none;
+  -webkit-text-fill-color: currentColor;
 }
 
 [data-theme="dark"] body,
@@ -688,8 +704,11 @@ body,
 [data-theme="dark"] .section-heading a,
 [data-theme="dark"] .series-link,
 [data-theme="dark"] .mobile-settings-button {
-  color: #aaa7ff;
+  color: #c1c0ff;
 }
+
+[data-theme="dark"] .section-heading a:hover,
+[data-theme="dark"] .series-link:hover { color: #eeedff; }
 
 [data-theme="dark"] .page-header p,
 [data-theme="dark"] .book-card > span,
@@ -767,6 +786,18 @@ body,
   color: #d2d0ff;
   background: transparent;
 }
+
+.startup-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 0 2px;
+}
+.startup-setting > div { display: flex; flex-direction: column; gap: 5px; }
+.startup-setting span { color: #55555d; font-size: 13px; line-height: 1.45; max-width: 680px; }
+[data-theme="dark"] .startup-setting span { color: #b9b9c1; }
+@media (max-width: 760px) { .startup-setting { align-items: flex-start; flex-direction: column; } }
 
 [data-theme="dark"] .tag-list span {
   color: #eeeeF2;

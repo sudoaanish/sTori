@@ -705,7 +705,7 @@ fn library_fingerprint(root: &Path) -> (u64, u64) {
             .and_then(|x| x.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        if ["epub", "pdf", "mobi", "opf", "jpg", "jpeg", "png"].contains(&ext.as_str()) {
+        if ["epub", "pdf", "opf", "jpg", "jpeg", "png"].contains(&ext.as_str()) {
             count += 1;
             if let Ok(metadata) = entry.metadata() {
                 if let Ok(modified) = metadata.modified() {

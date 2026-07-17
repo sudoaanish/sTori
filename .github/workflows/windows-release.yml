@@ -36,10 +36,29 @@ jobs:
         run: npm run build
 
       - name: Test Rust server
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
 
-      - name: Build NSIS installer
-        run: npm run tauri build -- --bundles nsis
+      - name: Build signed installer and draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: sTori ${{ github.ref_name }}
+          releaseBody: |
+            ## sTori ${{ github.ref_name }}
+
+            A private ebook server and reading room for your Windows PC and iPhone.
+
+            - Download and run the Windows `.exe` installer.
+            - Launch sTori, add a book library, then scan the QR code with your iPhone.
+            - Updates are signed and can be installed from inside the desktop app.
+          releaseDraft: true
+          prerelease: false
+          args: --bundles nsis
+          updaterJsonPreferNsis: true
 
       - name: Write checksums
         shell: pwsh
@@ -55,20 +74,18 @@ jobs:
           name: stori-windows-x64
           path: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/nsis/*-setup.exe.sig
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
             THIRD_PARTY_FONTS.md
           if-no-files-found: error
 
-      - name: Create GitHub release
+      - name: Attach verification files to the draft release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release create "${{ github.ref_name }}" `
-            "src-tauri/target/release/bundle/nsis/$((Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1).Name)" `
+          gh release upload "${{ github.ref_name }}" `
             "src-tauri/target/release/bundle/nsis/SHA256SUMS.txt" `
             "THIRD_PARTY_FONTS.md" `
-            --title "sTori ${{ github.ref_name }}" `
-            --generate-notes `
-            --draft
+            --clobber

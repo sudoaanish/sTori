@@ -24,7 +24,7 @@ pub fn scan_library(root: &Path) -> (Vec<ScannedBook>, Vec<String>) {
             .and_then(|x| x.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        if ["epub", "pdf", "mobi"].contains(&ext.as_str()) {
+        if ["epub", "pdf"].contains(&ext.as_str()) {
             if let Some(parent) = path.parent() {
                 groups
                     .entry(parent.to_path_buf())
@@ -52,7 +52,7 @@ pub fn scan_library(root: &Path) -> (Vec<ScannedBook>, Vec<String>) {
         let format = primary
             .extension()
             .and_then(|x| x.to_str())
-            .unwrap_or("mobi")
+            .unwrap_or("epub")
             .to_ascii_lowercase();
         let opf_path = [dir.join("metadata.opf"), dir.join("content.opf")]
             .into_iter()

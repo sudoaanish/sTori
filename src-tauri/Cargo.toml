@@ -1,6 +1,6 @@
 [package]
 name = "stori"
-version = "0.1.1"
+version = "0.1.2"
 description = "A private personal ebook server and reading room"
 authors = ["Aanish Farrukh"]
 edition = "2021"

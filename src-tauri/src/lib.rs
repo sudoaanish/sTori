@@ -37,16 +37,22 @@ pub fn run() {
                 db::Database::open(&data_dir.join("stori.db")).map_err(|e| e.to_string())?;
             let managed_library = std::env::var_os("STORI_MANAGED_LIBRARY_DIR").map(PathBuf::from).unwrap_or(app.path().download_dir()?.join("sTori Books"));
             let state = server::ServerState::new(database, managed_library);
-            let resource_dist = app.path().resource_dir()?.join("dist");
+            let resource_dir = app.path().resource_dir()?;
             let dev_dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .parent()
                 .unwrap()
                 .join("dist");
-            let dist = if resource_dist.join("index.html").exists() {
-                resource_dist
-            } else {
-                dev_dist
-            };
+            let dist = [
+                resource_dir.join("dist"),
+                // NSIS packages Tauri resources under `_up_`. Keep the normal
+                // resource layout first for development and future platform bundles.
+                resource_dir.join("_up_").join("dist"),
+                dev_dist,
+            ]
+            .into_iter()
+            .find(|candidate| candidate.join("index.html").is_file())
+            .ok_or("sTori web assets are missing from this installation")?;
+            tracing::info!(path = %dist.display(), "Serving sTori web assets");
             let listener = match std::net::TcpListener::bind(("0.0.0.0", server::PORT)) {
                 Ok(listener) => listener,
                 Err(error) => {

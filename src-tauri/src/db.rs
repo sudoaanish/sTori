@@ -900,24 +900,19 @@ mod tests {
     }
 
     #[test]
-    fn indexes_the_local_book_collection_read_only() {
-        let root = Path::new(r"D:\Books\Books");
+    fn indexes_an_optional_external_collection_read_only() {
+        let Some(root) = std::env::var_os("STORI_TEST_LIBRARY").map(PathBuf::from) else {
+            return;
+        };
         if !root.exists() {
             return;
         }
-        let (books, _) = scan_library(root);
-        assert!(
-            books.len() >= 190,
-            "expected the existing collection to contain at least 190 books"
-        );
-        assert!(books
-            .iter()
-            .any(|book| book.title.contains("Secrets of Divine Love")));
+        let (books, _) = scan_library(&root);
+        assert!(!books.is_empty(), "the optional test library contains no supported books");
         let temp = tempfile::tempdir().unwrap();
         let db = Database::open(&temp.path().join("test.db")).unwrap();
         let library = db.add_library("My Books", root.to_str().unwrap()).unwrap();
         db.store_scan(library.id, &books).unwrap();
         assert_eq!(db.books("", None).unwrap().len(), books.len());
-        assert!(!db.books("Narnia", None).unwrap().is_empty());
     }
 }

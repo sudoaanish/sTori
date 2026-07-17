@@ -1,0 +1,25 @@
+{
+  "name": "sTori",
+  "short_name": "sTori",
+  "description": "Your personal reading room",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#10111d",
+  "theme_color": "#10111d",
+  "icons": [
+    {
+      "src": "/icons/stori-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/stori-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

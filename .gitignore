@@ -1,0 +1,39 @@
+# Dependencies and build output
+/node_modules/
+/dist/
+/src-tauri/target/
+/.release/
+*.tsbuildinfo
+/vite.config.js
+/vite.config.d.ts
+
+# Runtime state and personal libraries
+/.stori-dev/
+*.db
+*.db-shm
+*.db-wal
+*.epub
+*.mobi
+*.azw
+*.azw3
+
+# Local design, and workspace folders for later use
+/workplace/
+placeholder-2
+placeholder-3
+placeholder-4
+placeholder-5
+placeholder-5
+placeholder-7
+placeholder-8
+
+# Local configuration, logs, and editor files
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+/.idea/
+/.vscode/

@@ -41,6 +41,7 @@
     "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
+        "installMode": "allUsers",
         "installerIcon": "icons/icon.ico",
         "uninstallerIcon": "icons/icon.ico",
         "displayLanguageSelector": false

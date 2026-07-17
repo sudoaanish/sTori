@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 3;
+const LATEST_SCHEMA_VERSION: i64 = 4;
 
 #[derive(Clone)]
 pub struct Database(pub Arc<Mutex<Connection>>, Arc<PathBuf>);
@@ -634,18 +634,32 @@ impl Database {
 
 #[cfg(windows)]
 fn firewall_rule_detected() -> Option<bool> {
-    let executable = std::env::current_exe().ok()?.to_string_lossy().to_ascii_lowercase();
+    let executable = std::env::current_exe()
+        .ok()?
+        .to_string_lossy()
+        .to_ascii_lowercase();
     let output = std::process::Command::new("netsh")
-        .args(["advfirewall", "firewall", "show", "rule", "name=all", "verbose"])
+        .args([
+            "advfirewall",
+            "firewall",
+            "show",
+            "rule",
+            "name=all",
+            "verbose",
+        ])
         .output()
         .ok()?;
-    if !output.status.success() { return None; }
+    if !output.status.success() {
+        return None;
+    }
     let rules = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
     Some(rules.contains(&executable))
 }
 
 #[cfg(not(windows))]
-fn firewall_rule_detected() -> Option<bool> { None }
+fn firewall_rule_detected() -> Option<bool> {
+    None
+}
 
 #[cfg(windows)]
 fn firewall_guidance() -> String {
@@ -775,6 +789,15 @@ fn migrate(conn: &mut Connection, path: &Path, existed: bool) -> Result<()> {
              CREATE INDEX IF NOT EXISTS idx_reader_tokens_active ON reader_tokens(revoked_at);",
         )?;
         tx.pragma_update(None, "user_version", 3)?;
+        tx.commit()?;
+        version = 3;
+    }
+    if version < 4 {
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM books WHERE lower(format)='mobi'", [])?;
+        tx.execute("DELETE FROM books_fts", [])?;
+        tx.execute("INSERT INTO books_fts(rowid,title,authors,tags,series) SELECT b.id,b.title,b.authors_json,b.tags_json,COALESCE(s.name,'') FROM books b LEFT JOIN series s ON s.id=b.series_id", [])?;
+        tx.pragma_update(None, "user_version", 4)?;
         tx.commit()?;
     }
     verify_integrity(conn)
@@ -908,7 +931,10 @@ mod tests {
             return;
         }
         let (books, _) = scan_library(&root);
-        assert!(!books.is_empty(), "the optional test library contains no supported books");
+        assert!(
+            !books.is_empty(),
+            "the optional test library contains no supported books"
+        );
         let temp = tempfile::tempdir().unwrap();
         let db = Database::open(&temp.path().join("test.db")).unwrap();
         let library = db.add_library("My Books", root.to_str().unwrap()).unwrap();

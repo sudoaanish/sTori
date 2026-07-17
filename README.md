@@ -10,7 +10,7 @@ sTori turns a Windows PC into a private ebook library server. Read on the deskto
 
 <p>
   <a href="https://github.com/sudoaanish/sTori/releases">
-    <img src="https://img.shields.io/badge/Version-v0.1.0%20Preview-34206B?style=for-the-badge&logo=github" alt="sTori v0.1.0 preview" />
+    <img src="https://img.shields.io/badge/Version-v0.1.1%20Preview-34206B?style=for-the-badge&logo=github" alt="sTori v0.1.1 preview" />
   </a>
   <a href="https://github.com/sudoaanish/sTori/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/sudoaanish/sTori?style=for-the-badge" alt="MIT license" />
@@ -38,14 +38,14 @@ sTori turns a Windows PC into a private ebook library server. Read on the deskto
 
 ---
 
-> **Windows preview:** sTori is early software. The v0.1.0 installer is currently unsigned, so Windows SmartScreen may display a warning.
+> **Windows preview:** sTori is early software. Installers are currently unsigned, so Windows SmartScreen may display a warning.
 
 ## Features
 
 - Tauri 2 desktop application with a Rust/Axum server on port `1822`
 - SQLite catalog, reading progress, annotations, collections, and series
 - Read-only scanning of existing ebook libraries
-- EPUB and PDF reading
+- EPUB and PDF reading (MOBI is not currently supported)
 - Project Gutenberg discovery and managed EPUB downloads
 - Automatic two-book starter shelf on first launch
 - Search, genres, inferred series, and manual collections
@@ -53,6 +53,7 @@ sTori turns a Windows PC into a private ebook library server. Read on the deskto
 - Responsive installable web-app shell
 - Database backups, integrity diagnostics, and download verification
 - Light and dark themes with selectable serif app and reader fonts
+- Signed in-app updates, system-tray operation, and optional Windows startup
 
 Configured source libraries are treated as read-only. Downloads managed by sTori are stored under the current Windows user's Downloads folder in `sTori Books`; no username is hardcoded.
 
@@ -64,7 +65,7 @@ Configured source libraries are treated as read-only. Downloads managed by sTori
 2. Download the Windows installer named similar to:
 
    ```text
-   sTori_0.1.0_x64-setup.exe
+   sTori_0.1.1_x64-setup.exe
    ```
 
 3. Run the installer and follow the Windows prompts.

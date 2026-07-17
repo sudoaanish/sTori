@@ -1,4 +1,4 @@
-import { BookCopy, Check, Download, Home, Library, LoaderCircle, RefreshCw, Search, Settings, Shapes, X } from 'lucide-react';
+import { BookCopy, Check, Download, DownloadIcon, Home, Library, LoaderCircle, RefreshCw, Search, Settings, Shapes, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -36,6 +36,10 @@ export function Shell() {
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState('');
   const [activeDownloads, setActiveDownloads] = useState(0);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'installing' | 'current' | 'failed'>('idle');
+  const [updateMessage, setUpdateMessage] = useState('');
+
+  const isDesktop = '__TAURI_INTERNALS__' in window;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -54,6 +58,52 @@ export function Shell() {
   useEffect(() => {
     api.health().then((health) => setVersion(health.version)).catch(() => setVersion('unavailable'));
   }, []);
+
+  const checkForUpdates = async () => {
+    if (!isDesktop) return;
+    setUpdateStatus('checking');
+    setUpdateMessage('Checking for an update…');
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (!update) {
+        setUpdateStatus('current');
+        setUpdateMessage('sTori is up to date.');
+        return;
+      }
+      setUpdateStatus('available');
+      setUpdateMessage(`sTori v${update.version} is ready to install.`);
+    } catch {
+      setUpdateStatus('failed');
+      setUpdateMessage('Could not check for updates. Try again later.');
+    }
+  };
+
+  const installUpdate = async () => {
+    setUpdateStatus('installing');
+    setUpdateMessage('Downloading and installing the update…');
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (!update) {
+        setUpdateStatus('current');
+        setUpdateMessage('sTori is already up to date.');
+        return;
+      }
+      await update.downloadAndInstall();
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    } catch {
+      setUpdateStatus('failed');
+      setUpdateMessage('The update could not be installed. Your current sTori is unchanged.');
+    }
+  };
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    const timer = window.setTimeout(() => { void checkForUpdates(); }, 1800);
+    return () => window.clearTimeout(timer);
+  }, [isDesktop]);
 
   useEffect(() => {
     const desktop = '__TAURI_INTERNALS__' in window || ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -79,12 +129,12 @@ export function Shell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <NavLink to="/" className="brand"><img src="/stori-logo-transparent.png" alt="sTori" /></NavLink>
+        <NavLink to="/" className="brand"><ThemedLogo /></NavLink>
         <nav>{nav.map(({ to, label, icon: Icon, desktopOnly }) => <NavLink key={to} to={to} className={desktopOnly ? 'desktop-only' : ''}><Icon size={19} /><span>{label}</span>{to === '/downloads' && activeDownloads > 0 && <em className="nav-download-badge">{activeDownloads}</em>}</NavLink>)}</nav>
         <div className="sidebar-foot"><BookCopy size={17} /><span>Your personal reading room</span></div>
       </aside>
       <header className="mobile-header">
-        <NavLink to="/" className="mobile-brand" aria-label="sTori home"><img src="/stori-logo-transparent.png" alt="sTori" /></NavLink>
+        <NavLink to="/" className="mobile-brand" aria-label="sTori home"><ThemedLogo /></NavLink>
         <button className="mobile-settings-button" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><Settings size={23}/></button>
       </header>
       <main className="main-content"><Outlet /></main>
@@ -117,6 +167,13 @@ export function Shell() {
                 <button className="primary-button rescan-button" disabled={scanning} onClick={rescan}>{scanning ? <LoaderCircle className="spin"/> : <RefreshCw/>}{scanning ? 'Scanning library…' : 'Refresh / rescan library'}</button>
                 {scanMessage && <p className="settings-status">{scanMessage}</p>}
               </section>
+
+              {isDesktop && <><div className="settings-divider"/><section>
+                <h3>Updates</h3>
+                <p>Secure updates are downloaded from sTori’s GitHub releases and verified before installation.</p>
+                {updateStatus === 'available' ? <button className="primary-button rescan-button" onClick={installUpdate}><DownloadIcon/>Install update</button> : <button className="secondary-button rescan-button" disabled={updateStatus === 'checking' || updateStatus === 'installing'} onClick={checkForUpdates}>{updateStatus === 'checking' || updateStatus === 'installing' ? <LoaderCircle className="spin"/> : <RefreshCw/>}{updateStatus === 'checking' ? 'Checking…' : updateStatus === 'installing' ? 'Installing…' : 'Check for updates'}</button>}
+                {updateMessage && <p className="settings-status" role="status">{updateMessage}</p>}
+              </section></>}
             </div>
             <footer><span>sTori {version ? `v${version}` : 'version…'}</span><span>Developed by Aanish Farrukh (sudoaanish)</span></footer>
           </section>
@@ -124,6 +181,10 @@ export function Shell() {
       )}
     </div>
   );
+}
+
+function ThemedLogo() {
+  return <span className="themed-logo"><img className="logo-light" src="/stori-logo-transparent.png" alt="sTori" /><img className="logo-dark" src="/stori-logo-dark-transparent.png" alt="" /></span>;
 }
 
 function FontPicker<T extends AppFontId | ReaderFontId>({ title, value, onChange, includePublisher = false }: { title: string; value: T; onChange: (font: T) => void; includePublisher?: boolean }) {

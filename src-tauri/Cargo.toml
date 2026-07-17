@@ -1,0 +1,54 @@
+[package]
+name = "stori"
+version = "0.1.0"
+description = "A private personal ebook server and reading room"
+authors = ["Aanish Farrukh"]
+edition = "2021"
+default-run = "stori"
+
+[features]
+default = []
+dev-server = []
+
+[[bin]]
+name = "stori-server"
+path = "src/bin/stori-server.rs"
+required-features = ["dev-server"]
+
+[lib]
+name = "stori_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+axum = { version = "0.8", features = ["json", "query"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+local-ip-address = "0.6"
+mime_guess = "2"
+parking_lot = "0.12"
+rand = "0.9"
+futures-util = "0.3"
+fs2 = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+roxmltree = "0.20"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+walkdir = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,7 +1,7 @@
 import { CheckCircle2, Database, FolderOpen, HardDrive, LoaderCircle, QrCode, RefreshCw, Server, ShieldCheck, Smartphone, Trash2, Wifi } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { api } from '../lib/api';
 import type { Connectivity, DatabaseBackup, Diagnostics, Library, PairedDevice } from '../types';
 
@@ -17,7 +17,7 @@ export function SettingsPage() {
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [startWithWindows, setStartWithWindows] = useState(false);
-  const isDesktop = '__TAURI_INTERNALS__' in window;
+  const isDesktop = isTauri();
 
   const load = () => Promise.all([api.libraries(), api.connectivity(), api.pairedDevices(), api.diagnostics(), api.backups()])
     .then(([libraryRows, connection, deviceRows, diagnosticRows, backupRows]) => {

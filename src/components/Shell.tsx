@@ -1,5 +1,6 @@
 import { BookCopy, Check, Download, DownloadIcon, Home, Library, LoaderCircle, RefreshCw, Search, Settings, Shapes, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import { NavLink, Outlet } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
@@ -39,7 +40,7 @@ export function Shell() {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'installing' | 'current' | 'failed'>('idle');
   const [updateMessage, setUpdateMessage] = useState('');
 
-  const isDesktop = '__TAURI_INTERNALS__' in window;
+  const isDesktop = isTauri();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -106,7 +107,7 @@ export function Shell() {
   }, [isDesktop]);
 
   useEffect(() => {
-    const desktop = '__TAURI_INTERNALS__' in window || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const desktop = isTauri() || ['localhost', '127.0.0.1'].includes(window.location.hostname);
     if (!desktop) return;
     const load = () => api.downloadJobs().then((jobs) => setActiveDownloads(jobs.filter((job) => ['queued', 'downloading', 'verifying', 'importing', 'indexing'].includes(job.status)).length)).catch(() => undefined);
     load();

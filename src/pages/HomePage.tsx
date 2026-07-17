@@ -1,5 +1,6 @@
 import { ArrowRight, BookOpenText, Download, LoaderCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import { Link } from 'react-router-dom';
 import { BookCard } from '../components/BookCard';
 import { api } from '../lib/api';
@@ -23,7 +24,7 @@ export function HomePage() {
   }, []);
 
   useEffect(() => {
-    const desktop = '__TAURI_INTERNALS__' in window || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const desktop = isTauri() || ['localhost', '127.0.0.1'].includes(window.location.hostname);
     if (!desktop) return;
     const loadStarter = () => Promise.all([api.downloadJobs(), api.books()]).then(([jobs, rows]) => {
       setStarterJobs(jobs.filter((job) => job.provider === 'Standard Ebooks'));

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { api, ApiError } from './lib/api';
@@ -12,7 +13,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { DownloadsPage } from './pages/DownloadsPage';
 
 function DesktopOnly({ children }: { children: React.ReactNode }) {
-  const desktop = '__TAURI_INTERNALS__' in window || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const desktop = isTauri() || ['localhost', '127.0.0.1'].includes(window.location.hostname);
   return desktop ? children : <Navigate to="/" replace />;
 }
 
@@ -39,7 +40,7 @@ function PairingGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const pairCode = new URLSearchParams(location.search).get('pair');
-    const isDesktop = '__TAURI_INTERNALS__' in window || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isDesktop = isTauri() || ['localhost', '127.0.0.1'].includes(window.location.hostname);
     if (pairCode) {
       pairDevice(pairCode);
       return;

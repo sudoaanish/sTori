@@ -1,7 +1,7 @@
 import type { Annotation, Book, CatalogBook, Collection, Connectivity, DatabaseBackup, Diagnostics, DownloadJob, Library, PairedDevice, ReadingState, Series } from '../types';
+import { isTauri } from '@tauri-apps/api/core';
 
-const isTauri = '__TAURI_INTERNALS__' in window;
-export const API_BASE = isTauri ? 'http://127.0.0.1:1822' : '';
+export const API_BASE = isTauri() ? 'http://127.0.0.1:1822' : '';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

@@ -27,7 +27,7 @@ use std::{
 use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
-    trace::TraceLayer,
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
 
 pub const PORT: u16 = 1822;
@@ -132,7 +132,9 @@ async fn run_with_listener(
                 .allow_headers(Any)
                 .allow_methods(Any),
         )
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http()
+            .make_span_with(DefaultMakeSpan::new().include_headers(false))
+            .on_response(DefaultOnResponse::new().include_headers(false)))
         .with_state(state);
     axum::serve(
         listener,

@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, Bookmark } from 'lucide-react';
+import { ArrowLeft, BookOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -28,7 +28,7 @@ export function BookDetailPage() {
           {book.subtitle && <h2>{book.subtitle}</h2>}
           <p className="authors">{book.authors.join(', ') || 'Unknown author'}</p>
           {book.series_id && <Link className="series-link" to={`/collections/series/${book.series_id}`}>{book.series_name}{book.series_index ? ` · Book ${book.series_index}` : ''}</Link>}
-          <div className="detail-actions"><Link className="primary-button" to={`/read/${book.id}`} state={{ fromBook: true, bookOrigin: origin || '/' }}><BookOpen size={18}/>{book.progress ? 'Continue reading' : 'Start reading'}</Link><Link className="secondary-button" to={`/read/${book.id}`} state={{ fromBook: true, bookOrigin: origin || '/' }}><Bookmark size={18}/> Bookmark in reader</Link></div>
+          <div className="detail-actions"><Link className="primary-button" to={`/read/${book.id}`} state={{ fromBook: true, bookOrigin: origin || '/' }}><BookOpen size={18}/>{book.progress ? 'Continue reading' : 'Start reading'}</Link></div>
           {book.progress > 0 && <div className="detail-progress"><div><span style={{width: `${book.progress * 100}%`}}/></div><small>{Math.round(book.progress * 100)}% complete</small></div>}
           {book.description && <p className="description">{book.description}</p>}
           <div className="tag-list">{book.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>

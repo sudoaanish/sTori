@@ -23,13 +23,22 @@ pub enum AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let status = match self {
+        let status = match &self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::NotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (status, Json(json!({ "error": self.to_string() }))).into_response()
+        if status.is_server_error() {
+            tracing::error!(status = %status, error = %self, "API request failed");
+        }
+        let message = match &self {
+            Self::BadRequest(message) => message.clone(),
+            Self::Unauthorized => "Not authorized".into(),
+            Self::NotFound => "Not found".into(),
+            _ => "Something went wrong on the sTori server. Please try again.".into(),
+        };
+        (status, Json(json!({ "error": message }))).into_response()
     }
 }
 

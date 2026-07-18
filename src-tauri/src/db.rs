@@ -397,6 +397,11 @@ impl Database {
         if !["bookmark", "highlight", "note"].contains(&req.kind.as_str()) {
             return Err(AppError::BadRequest("Invalid annotation kind".into()));
         }
+        // Installed PWAs from before the dedicated bookmark endpoint still use this route.
+        // Keep them compatible with the bookmark uniqueness guarantee instead of leaking a SQLite 500.
+        if req.kind == "bookmark" {
+            return self.add_bookmark(book_id, &req.locator, req.text.clone());
+        }
         let now = chrono::Utc::now().to_rfc3339();
         let conn = self.0.lock();
         conn.execute("INSERT INTO annotations(book_id,kind,locator,text,note,created_at) VALUES(?1,?2,?3,?4,?5,?6)",params![book_id,req.kind,req.locator,req.text,req.note,now])?;
@@ -1010,6 +1015,8 @@ mod tests {
         let first = db.add_bookmark(1, "epubcfi(/6/2)", Some("10%".into())).unwrap();
         let duplicate = db.add_bookmark(1, "epubcfi(/6/2)", Some("changed".into())).unwrap();
         assert_eq!(first.id, duplicate.id);
+        let legacy = db.add_annotation(1, &AnnotationRequest { kind: "bookmark".into(), locator: "epubcfi(/6/2)".into(), text: Some("legacy".into()), note: None }).unwrap();
+        assert_eq!(first.id, legacy.id);
         assert_eq!(db.bookmarks(1).unwrap().len(), 1);
         assert!(db.bookmarks(2).unwrap().is_empty());
         assert!(db.add_bookmark(1, "", None).is_err());

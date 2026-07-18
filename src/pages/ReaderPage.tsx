@@ -1,4 +1,4 @@
-import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Moon, Settings2, Sun, Trash2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Moon, Settings2, Sun, Trash2, X } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
 import { CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -56,6 +56,8 @@ export function ReaderPage() {
   const [bookmarkError, setBookmarkError] = useState('');
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const [jumpToBookmark, setJumpToBookmark] = useState<string>();
+  const bookmarkPanelRef = useRef<HTMLElement>(null);
+  const bookmarkPanelTriggerRef = useRef<HTMLButtonElement>(null);
   const [appearance, setAppearance] = useState<ReaderAppearance>(() => ({
     theme: (localStorage.getItem('stori_theme') as Theme) || 'paper',
     font: storedReaderFont(),
@@ -80,6 +82,18 @@ export function ReaderPage() {
     localStorage.setItem('stori_paragraph_style', appearance.paragraphs);
     localStorage.setItem('stori_hyphenation', String(appearance.hyphenation));
   }, [appearance]);
+  useEffect(() => {
+    if (!bookmarkPanel) return;
+    bookmarkPanelRef.current?.querySelector<HTMLButtonElement>('[data-bookmark-close]')?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setBookmarkPanel(false); };
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!bookmarkPanelRef.current?.contains(target) && !bookmarkPanelTriggerRef.current?.contains(target)) setBookmarkPanel(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOutside);
+    return () => { document.removeEventListener('keydown', closeOnEscape); document.removeEventListener('pointerdown', closeOutside); };
+  }, [bookmarkPanel]);
 
   const changeAppearance = <K extends keyof ReaderAppearance>(key: K, value: ReaderAppearance[K]) => {
     setAppearance((current) => ({ ...current, [key]: value }));
@@ -112,9 +126,9 @@ export function ReaderPage() {
 
   return (
     <div className={`reader theme-${appearance.theme}`} onClick={() => setControls((visible) => !visible)}>
-      {controls && <header className="reader-top" onClick={(event) => event.stopPropagation()}><button aria-label="Back to book" onClick={leaveReader}><ArrowLeft/></button><div><strong>{book.title}</strong><span>{book.authors.join(', ')}</span></div><button aria-label={selectedBookmark ? 'Remove bookmark' : 'Add bookmark'} aria-pressed={Boolean(selectedBookmark)} className={selectedBookmark ? 'bookmark-selected' : ''} disabled={bookmarkBusy} onClick={toggleBookmark}><Bookmark fill={selectedBookmark ? 'currentColor' : 'none'}/></button><button aria-label="Show bookmarks" onClick={() => setBookmarkPanel((visible) => !visible)}>Bookmarks ({bookmarks.length})</button><button aria-label="Reading appearance" onClick={() => setSettings((visible) => !visible)}><Settings2/></button></header>}
+      {controls && <header className="reader-top" onClick={(event) => event.stopPropagation()}><button aria-label="Back to book" onClick={leaveReader}><ArrowLeft/></button><div><strong>{book.title}</strong><span>{book.authors.join(', ')}</span></div><button aria-label={selectedBookmark ? 'Remove bookmark' : 'Add bookmark'} aria-pressed={Boolean(selectedBookmark)} className={selectedBookmark ? 'bookmark-selected' : ''} disabled={bookmarkBusy} onClick={toggleBookmark}><Bookmark fill={selectedBookmark ? 'currentColor' : 'none'}/></button><button ref={bookmarkPanelTriggerRef} aria-label="Show bookmarks" aria-expanded={bookmarkPanel} aria-controls="reader-bookmarks" onClick={() => setBookmarkPanel((visible) => !visible)}>Bookmarks ({bookmarks.length})</button><button aria-label="Reading appearance" onClick={() => setSettings((visible) => !visible)}><Settings2/></button></header>}
       {bookmarkError && <p className="reader-bookmark-error" role="alert">{bookmarkError}</p>}
-      {bookmarkPanel && <aside className="reader-bookmarks" onClick={(event) => event.stopPropagation()}><h3>Bookmarks</h3>{bookmarks.length ? <ul>{bookmarks.map((bookmark) => <li key={bookmark.id}><button onClick={() => { setJumpToBookmark(bookmark.locator); setBookmarkPanel(false); }}>Go to {bookmark.text || 'saved location'}</button><button aria-label="Delete bookmark" onClick={() => api.deleteBookmark(book.id, bookmark.id).then(() => setBookmarks((current) => current.filter((item) => item.id !== bookmark.id))).catch((error) => setBookmarkError(error.message))}><Trash2/></button></li>)}</ul> : <p>No bookmarks in this book.</p>}</aside>}
+      {bookmarkPanel && <aside ref={bookmarkPanelRef} id="reader-bookmarks" className="reader-bookmarks" aria-label="Bookmarks" onClick={(event) => event.stopPropagation()}><div className="reader-bookmarks-header"><h3>Bookmarks</h3><button data-bookmark-close aria-label="Close bookmarks" onClick={() => { setBookmarkPanel(false); bookmarkPanelTriggerRef.current?.focus(); }}><X/></button></div>{bookmarks.length ? <ul>{bookmarks.map((bookmark) => <li key={bookmark.id}><button className="bookmark-jump" onClick={() => { setJumpToBookmark(bookmark.locator); setBookmarkPanel(false); }}>Go to <span>{bookmark.text || 'saved location'}</span></button><button className="bookmark-delete" aria-label={`Delete bookmark at ${bookmark.text || 'saved location'}`} onClick={() => api.deleteBookmark(book.id, bookmark.id).then(() => setBookmarks((current) => current.filter((item) => item.id !== bookmark.id))).catch((error) => setBookmarkError(error.message))}><Trash2/></button></li>)}</ul> : <p className="reader-bookmarks-empty">No bookmarks in this book.</p>}</aside>}
 
       {settings && (
         <div className="reader-settings" onClick={(event) => event.stopPropagation()}>

@@ -2,6 +2,14 @@
 
 All notable changes to sTori will be documented here.
 
+## 0.1.5 - Reader reliability and EPUB safety
+
+- Added persistent reader bookmarks with navigation and deletion in the shared Windows and Safari Reading Room.
+- Made Project Gutenberg discovery more resilient with retry, progressive loading, and duplicate suppression.
+- Hardened new EPUB imports against malformed archives, unsafe paths, unreasonable resource use, and unsafe active content.
+- Improved reader controls, service-worker update behavior, and safe server diagnostics.
+- Known issue: bookmarking from an installed iPhone PWA is not reliable; use Safari-based Reading Room access on iPhone.
+
 ## 0.1.4 - Library intelligence
 
 - Read embedded EPUB metadata and cover images when sidecar OPF or cover files are absent.

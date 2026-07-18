@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-const LATEST_SCHEMA_VERSION: i64 = 4;
+const LATEST_SCHEMA_VERSION: i64 = 5;
 
 #[derive(Clone)]
 pub struct Database(pub Arc<Mutex<Connection>>, Arc<PathBuf>);
@@ -410,6 +410,33 @@ impl Database {
             note: req.note.clone(),
             created_at: now,
         })
+    }
+    pub fn bookmarks(&self, book_id: i64) -> Result<Vec<AnnotationDto>> {
+        self.book(book_id)?;
+        let conn = self.0.lock();
+        let mut stmt = conn.prepare("SELECT id,book_id,kind,locator,text,note,created_at FROM annotations WHERE book_id=?1 AND kind='bookmark' ORDER BY created_at DESC")?;
+        let rows = stmt.query_map([book_id], |r| Ok(AnnotationDto { id: r.get(0)?, book_id: r.get(1)?, kind: r.get(2)?, locator: r.get(3)?, text: r.get(4)?, note: r.get(5)?, created_at: r.get(6)? }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+    pub fn add_bookmark(&self, book_id: i64, locator: &str, text: Option<String>) -> Result<AnnotationDto> {
+        let locator = locator.trim();
+        if locator.is_empty() { return Err(AppError::BadRequest("A bookmark location is required".into())); }
+        self.book(book_id)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        let conn = self.0.lock();
+        let existing: Option<i64> = conn.query_row("SELECT id FROM annotations WHERE book_id=?1 AND kind='bookmark' AND locator=?2", params![book_id, locator], |r| r.get(0)).optional()?;
+        if let Some(id) = existing {
+            if text.is_some() { conn.execute("UPDATE annotations SET text=?1 WHERE id=?2", params![text, id])?; }
+        } else {
+            conn.execute("INSERT INTO annotations(book_id,kind,locator,text,note,created_at) VALUES(?1,'bookmark',?2,?3,NULL,?4)", params![book_id, locator, text, now])?;
+        }
+        conn.query_row("SELECT id,book_id,kind,locator,text,note,created_at FROM annotations WHERE book_id=?1 AND kind='bookmark' AND locator=?2", params![book_id, locator], |r| Ok(AnnotationDto { id: r.get(0)?, book_id: r.get(1)?, kind: r.get(2)?, locator: r.get(3)?, text: r.get(4)?, note: r.get(5)?, created_at: r.get(6)? })).map_err(Into::into)
+    }
+    pub fn delete_bookmark(&self, book_id: i64, bookmark_id: i64) -> Result<()> {
+        self.book(book_id)?;
+        let changed = self.0.lock().execute("DELETE FROM annotations WHERE id=?1 AND book_id=?2 AND kind='bookmark'", params![bookmark_id, book_id])?;
+        if changed == 0 { return Err(AppError::NotFound); }
+        Ok(())
     }
     pub fn save_reader_token(
         &self,
@@ -847,6 +874,12 @@ fn migrate(conn: &mut Connection, path: &Path, existed: bool) -> Result<()> {
         tx.pragma_update(None, "user_version", 4)?;
         tx.commit()?;
     }
+    if version < 5 {
+        let tx = conn.transaction()?;
+        tx.execute_batch("DELETE FROM annotations WHERE kind='bookmark' AND id NOT IN (SELECT MIN(id) FROM annotations WHERE kind='bookmark' GROUP BY book_id, locator); CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_unique_location ON annotations(book_id, kind, locator) WHERE kind='bookmark';")?;
+        tx.pragma_update(None, "user_version", 5)?;
+        tx.commit()?;
+    }
     verify_integrity(conn)
 }
 
@@ -967,6 +1000,22 @@ mod tests {
             copy.setting("backup-test").unwrap().as_deref(),
             Some("preserved")
         );
+    }
+
+    #[test]
+    fn bookmarks_are_unique_per_book_and_can_be_deleted() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Database::open(&temp.path().join("bookmarks.db")).unwrap();
+        db.0.lock().execute_batch("INSERT INTO libraries(id,name,path) VALUES(1,'Test','C:/Test'); INSERT INTO books(id,library_id,directory_path,title,authors_json,tags_json,format,file_path,file_name,updated_at) VALUES(1,1,'one','One','[]','[]','epub','one.epub','one.epub','now'),(2,1,'two','Two','[]','[]','epub','two.epub','two.epub','now');").unwrap();
+        let first = db.add_bookmark(1, "epubcfi(/6/2)", Some("10%".into())).unwrap();
+        let duplicate = db.add_bookmark(1, "epubcfi(/6/2)", Some("changed".into())).unwrap();
+        assert_eq!(first.id, duplicate.id);
+        assert_eq!(db.bookmarks(1).unwrap().len(), 1);
+        assert!(db.bookmarks(2).unwrap().is_empty());
+        assert!(db.add_bookmark(1, "", None).is_err());
+        assert!(db.add_bookmark(999, "epubcfi(/6/2)", None).is_err());
+        db.delete_bookmark(1, first.id).unwrap();
+        assert!(db.bookmarks(1).unwrap().is_empty());
     }
 
     #[test]

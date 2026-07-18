@@ -116,6 +116,8 @@ async fn run_with_listener(
             "/api/books/{id}/annotations",
             get(annotations).post(add_annotation),
         )
+        .route("/api/books/{id}/bookmarks", get(bookmarks).post(add_bookmark))
+        .route("/api/books/{id}/bookmarks/{bookmark_id}", axum::routing::delete(delete_bookmark))
         .route("/api/series", get(series))
         .route("/api/series/{id}", get(series_by_id))
         .route("/api/collections", get(collections).post(create_collection))
@@ -231,6 +233,7 @@ async fn remove_library(
 #[derive(Deserialize)]
 struct CatalogQuery {
     q: String,
+    page: Option<u32>,
 }
 
 async fn catalog_search(
@@ -239,7 +242,7 @@ async fn catalog_search(
     Query(q): Query<CatalogQuery>,
 ) -> Result<Json<CatalogSearchDto>> {
     admin(a)?;
-    Ok(Json(s.downloads.search(&q.q).await?))
+    Ok(Json(s.downloads.search(&q.q, q.page.unwrap_or(1)).await?))
 }
 
 async fn download_jobs(
@@ -509,6 +512,19 @@ async fn add_annotation(
 ) -> Result<Json<AnnotationDto>> {
     authorize(&s, a, &headers, None)?;
     Ok(Json(s.db.add_annotation(id, &r)?))
+}
+async fn bookmarks(State(s): State<ServerState>, ConnectInfo(a): ConnectInfo<SocketAddr>, headers: HeaderMap, AxPath(id): AxPath<i64>) -> Result<Json<Vec<AnnotationDto>>> {
+    authorize(&s, a, &headers, None)?;
+    Ok(Json(s.db.bookmarks(id)?))
+}
+async fn add_bookmark(State(s): State<ServerState>, ConnectInfo(a): ConnectInfo<SocketAddr>, headers: HeaderMap, AxPath(id): AxPath<i64>, Json(r): Json<BookmarkRequest>) -> Result<Json<AnnotationDto>> {
+    authorize(&s, a, &headers, None)?;
+    Ok(Json(s.db.add_bookmark(id, &r.locator, r.text)?))
+}
+async fn delete_bookmark(State(s): State<ServerState>, ConnectInfo(a): ConnectInfo<SocketAddr>, headers: HeaderMap, AxPath((id, bookmark_id)): AxPath<(i64, i64)>) -> Result<Json<serde_json::Value>> {
+    authorize(&s, a, &headers, None)?;
+    s.db.delete_bookmark(id, bookmark_id)?;
+    Ok(Json(json!({"ok": true})))
 }
 
 #[derive(Clone, Serialize)]

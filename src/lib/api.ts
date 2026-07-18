@@ -56,6 +56,9 @@ export const api = {
   saveProgress: (bookId: number, locator: string, progress: number) => request<ReadingState>(`/api/books/${bookId}/progress`, { method: 'PUT', body: JSON.stringify({ locator, progress }) }),
   annotations: (bookId: number) => request<Annotation[]>(`/api/books/${bookId}/annotations`),
   addAnnotation: (bookId: number, payload: Omit<Annotation, 'id' | 'book_id' | 'created_at'>) => request<Annotation>(`/api/books/${bookId}/annotations`, { method: 'POST', body: JSON.stringify(payload) }),
+  bookmarks: (bookId: number) => request<Annotation[]>(`/api/books/${bookId}/bookmarks`),
+  addBookmark: (bookId: number, payload: { locator: string; text?: string }) => request<Annotation>(`/api/books/${bookId}/bookmarks`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteBookmark: (bookId: number, bookmarkId: number) => request<{ ok: boolean }>(`/api/books/${bookId}/bookmarks/${bookmarkId}`, { method: 'DELETE' }),
   connectivity: () => request<Connectivity>('/api/admin/connectivity'),
   createPairing: () => request<Connectivity>('/api/admin/pairing', { method: 'POST' }),
   pairedDevices: () => request<PairedDevice[]>('/api/admin/devices'),
@@ -66,7 +69,7 @@ export const api = {
   createBackup: () => request<DatabaseBackup>('/api/admin/backups', { method: 'POST' }),
   rescanLibraries: () => request<{ indexed: number; warnings: string[]; libraries: number }>('/api/library/rescan', { method: 'POST' }),
   pair: (code: string) => request<{ token: string }>('/api/auth/pair', { method: 'POST', body: JSON.stringify({ code }) })
-  ,catalogSearch: (query: string) => request<{ results: CatalogBook[]; warnings: string[] }>(`/api/admin/catalog/search?q=${encodeURIComponent(query)}`)
+  ,catalogSearch: (query: string, page = 1) => request<{ results: CatalogBook[]; warnings: string[]; next_page?: number }>(`/api/admin/catalog/search?q=${encodeURIComponent(query)}&page=${page}`)
   ,downloadJobs: () => request<DownloadJob[]>('/api/admin/downloads')
   ,queueDownload: (libraryId: number, book: CatalogBook) => request<DownloadJob>('/api/admin/downloads', { method: 'POST', body: JSON.stringify({ library_id: libraryId, book }) })
   ,pauseDownload: (id: string) => request<{ ok: boolean }>(`/api/admin/downloads/${id}/pause`, { method: 'POST' })

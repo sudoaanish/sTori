@@ -155,37 +155,28 @@ impl DownloadManager {
         Ok(())
     }
 
-    pub async fn search(&self, query: &str) -> Result<CatalogSearchDto> {
+    pub async fn search(&self, query: &str, page: u32) -> Result<CatalogSearchDto> {
         let query = query.trim();
         if query.len() < 2 {
             return Err(AppError::BadRequest("Enter at least two characters".into()));
         }
-        let mut warnings = Vec::new();
-        let results = match tokio::time::timeout(
-            std::time::Duration::from_secs(8),
-            self.search_gutenberg(query),
-        )
-        .await
-        {
-            Ok(Ok(rows)) => rows,
-            Ok(Err(error)) => {
-                warnings.push(provider_warning("Project Gutenberg", &error));
-                Vec::new()
+        let page = page.max(1);
+        let mut last_error = None;
+        for _ in 0..2 {
+            match tokio::time::timeout(std::time::Duration::from_secs(12), self.search_gutenberg(query, page)).await {
+                Ok(Ok((results, next_page))) => return Ok(CatalogSearchDto { results, warnings: Vec::new(), next_page }),
+                Ok(Err(error)) => last_error = Some(error),
+                Err(_) => last_error = Some(AppError::Internal("Project Gutenberg took too long to respond. Please try again.".into())),
             }
-            Err(_) => {
-                warnings
-                    .push("Project Gutenberg took too long to respond. Please try again.".into());
-                Vec::new()
-            }
-        };
-        Ok(CatalogSearchDto { results, warnings })
+        }
+        Err(last_error.unwrap_or_else(|| AppError::Internal("Project Gutenberg is temporarily unavailable. Please try again.".into())))
     }
 
-    async fn search_gutenberg(&self, query: &str) -> Result<Vec<CatalogBookDto>> {
+    async fn search_gutenberg(&self, query: &str, page: u32) -> Result<(Vec<CatalogBookDto>, Option<u32>)> {
         let response: Value = self
             .client
             .get("https://gutendex.com/books")
-            .query(&[("search", query)])
+            .query(&[("search", query), ("page", &page.to_string())])
             .send()
             .await
             .map_err(http_error)?
@@ -243,7 +234,7 @@ impl DownloadManager {
                 license_label: "Public domain — Project Gutenberg".into(),
             });
         }
-        Ok(out)
+        Ok((out, response["next"].as_str().map(|_| page + 1)))
     }
 
     pub fn jobs(&self) -> Result<Vec<DownloadJobDto>> {
@@ -882,14 +873,6 @@ fn validate_download_url(value: &str) -> Result<()> {
 }
 fn http_error(error: reqwest::Error) -> AppError {
     AppError::Internal(error.to_string())
-}
-fn provider_warning(provider: &str, error: &AppError) -> String {
-    let detail = error.to_string();
-    if detail.contains("429") {
-        format!("{provider} is temporarily rate-limited; results from other sources are still available.")
-    } else {
-        format!("{provider} is temporarily unavailable; results from other sources are still available.")
-    }
 }
 fn strings(value: &Value) -> Vec<String> {
     value

@@ -92,6 +92,12 @@ pub struct AnnotationRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct BookmarkRequest {
+    pub locator: String,
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct PairRequest {
     pub code: String,
     pub device_name: Option<String>,
@@ -162,6 +168,7 @@ pub struct CatalogBookDto {
 pub struct CatalogSearchDto {
     pub results: Vec<CatalogBookDto>,
     pub warnings: Vec<String>,
+    pub next_page: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]

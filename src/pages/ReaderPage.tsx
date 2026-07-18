@@ -1,4 +1,4 @@
-import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Moon, Settings2, Sun } from 'lucide-react';
+import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Moon, Settings2, Sun, Trash2 } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
 import { CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -12,7 +12,7 @@ import {
   READER_FONT_STORAGE_KEY,
   ReaderFontId,
 } from '../lib/typography';
-import type { Book } from '../types';
+import type { Annotation, Book } from '../types';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
@@ -50,6 +50,12 @@ export function ReaderPage() {
   const [controls, setControls] = useState(true);
   const [settings, setSettings] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [locator, setLocator] = useState('');
+  const [bookmarks, setBookmarks] = useState<Annotation[]>([]);
+  const [bookmarkPanel, setBookmarkPanel] = useState(false);
+  const [bookmarkError, setBookmarkError] = useState('');
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
+  const [jumpToBookmark, setJumpToBookmark] = useState<string>();
   const [appearance, setAppearance] = useState<ReaderAppearance>(() => ({
     theme: (localStorage.getItem('stori_theme') as Theme) || 'paper',
     font: storedReaderFont(),
@@ -62,6 +68,7 @@ export function ReaderPage() {
   }));
 
   useEffect(() => { if (id) api.book(Number(id)).then(setBook); }, [id]);
+  useEffect(() => { if (id) api.bookmarks(Number(id)).then(setBookmarks).catch((error) => setBookmarkError(error.message)); }, [id]);
 
   useEffect(() => {
     localStorage.setItem('stori_theme', appearance.theme);
@@ -85,12 +92,29 @@ export function ReaderPage() {
     }
     if (book) navigate(`/books/${book.id}`, { replace: true, state: { from: navigationState?.bookOrigin || '/' } });
   };
+  const selectedBookmark = bookmarks.find((bookmark) => bookmark.locator === locator);
+  const toggleBookmark = async () => {
+    if (!book || !locator || bookmarkBusy) { if (!locator) setBookmarkError('The reader is still finding your current location.'); return; }
+    setBookmarkBusy(true); setBookmarkError('');
+    try {
+      if (selectedBookmark) {
+        await api.deleteBookmark(book.id, selectedBookmark.id);
+        setBookmarks((current) => current.filter((bookmark) => bookmark.id !== selectedBookmark.id));
+      } else {
+        const saved = await api.addBookmark(book.id, { locator, text: `${Math.round(progress * 100)}%` });
+        setBookmarks((current) => [saved, ...current.filter((bookmark) => bookmark.id !== saved.id)]);
+      }
+    } catch (error) { setBookmarkError(error instanceof Error ? error.message : 'Could not update bookmark.'); }
+    finally { setBookmarkBusy(false); }
+  };
 
   if (!book) return <div className="reader loading">Opening book…</div>;
 
   return (
     <div className={`reader theme-${appearance.theme}`} onClick={() => setControls((visible) => !visible)}>
-      {controls && <header className="reader-top" onClick={(event) => event.stopPropagation()}><button aria-label="Back to book" onClick={leaveReader}><ArrowLeft/></button><div><strong>{book.title}</strong><span>{book.authors.join(', ')}</span></div><button aria-label="Add bookmark" onClick={() => api.addAnnotation(book.id, { kind: 'bookmark', locator: String(progress), text: book.title })}><Bookmark/></button><button aria-label="Reading appearance" onClick={() => setSettings((visible) => !visible)}><Settings2/></button></header>}
+      {controls && <header className="reader-top" onClick={(event) => event.stopPropagation()}><button aria-label="Back to book" onClick={leaveReader}><ArrowLeft/></button><div><strong>{book.title}</strong><span>{book.authors.join(', ')}</span></div><button aria-label={selectedBookmark ? 'Remove bookmark' : 'Add bookmark'} aria-pressed={Boolean(selectedBookmark)} className={selectedBookmark ? 'bookmark-selected' : ''} disabled={bookmarkBusy} onClick={toggleBookmark}><Bookmark fill={selectedBookmark ? 'currentColor' : 'none'}/></button><button aria-label="Show bookmarks" onClick={() => setBookmarkPanel((visible) => !visible)}>Bookmarks ({bookmarks.length})</button><button aria-label="Reading appearance" onClick={() => setSettings((visible) => !visible)}><Settings2/></button></header>}
+      {bookmarkError && <p className="reader-bookmark-error" role="alert">{bookmarkError}</p>}
+      {bookmarkPanel && <aside className="reader-bookmarks" onClick={(event) => event.stopPropagation()}><h3>Bookmarks</h3>{bookmarks.length ? <ul>{bookmarks.map((bookmark) => <li key={bookmark.id}><button onClick={() => { setJumpToBookmark(bookmark.locator); setBookmarkPanel(false); }}>Go to {bookmark.text || 'saved location'}</button><button aria-label="Delete bookmark" onClick={() => api.deleteBookmark(book.id, bookmark.id).then(() => setBookmarks((current) => current.filter((item) => item.id !== bookmark.id))).catch((error) => setBookmarkError(error.message))}><Trash2/></button></li>)}</ul> : <p>No bookmarks in this book.</p>}</aside>}
 
       {settings && (
         <div className="reader-settings" onClick={(event) => event.stopPropagation()}>
@@ -108,13 +132,13 @@ export function ReaderPage() {
         </div>
       )}
 
-      <div className="reader-stage" onClick={(event) => event.stopPropagation()}>{book.format === 'epub' ? <EpubReader book={book} appearance={appearance} onProgress={setProgress}/> : book.format === 'pdf' ? <PdfReader book={book} onProgress={setProgress}/> : <div className="empty-state"><h2>MOBI reading is not available yet</h2><p>This book is indexed and ready for a future converter/reader.</p></div>}</div>
+      <div className="reader-stage" onClick={(event) => event.stopPropagation()}>{book.format === 'epub' ? <EpubReader book={book} appearance={appearance} onProgress={setProgress} onLocation={setLocator} jumpTo={jumpToBookmark}/> : book.format === 'pdf' ? <PdfReader book={book} onProgress={setProgress} onLocation={setLocator} jumpTo={jumpToBookmark}/> : <div className="empty-state"><h2>MOBI reading is not available yet</h2><p>This book is indexed and ready for a future converter/reader.</p></div>}</div>
       {controls && <footer className="reader-bottom"><span>{Math.round(progress * 100)}%</span><div><span style={{width: `${progress * 100}%`}}/></div></footer>}
     </div>
   );
 }
 
-function EpubReader({ book, appearance, onProgress }: { book: Book; appearance: ReaderAppearance; onProgress: (progress: number) => void }) {
+function EpubReader({ book, appearance, onProgress, onLocation, jumpTo }: { book: Book; appearance: ReaderAppearance; onProgress: (progress: number) => void; onLocation: (locator: string) => void; jumpTo?: string }) {
   const host = useRef<HTMLDivElement>(null);
   const epubRef = useRef<EpubBook | undefined>(undefined);
   const renditionRef = useRef<Rendition | undefined>(undefined);
@@ -157,12 +181,14 @@ function EpubReader({ book, appearance, onProgress }: { book: Book; appearance: 
       rendition.on('relocated', (relocation: { start: { cfi: string; percentage?: number } }) => {
         const percentage = relocation.start.percentage ?? epub.locations.percentageFromCfi(relocation.start.cfi);
         onProgress(percentage);
+        onLocation(relocation.start.cfi);
         api.saveProgress(book.id, relocation.start.cfi, percentage).catch(() => undefined);
       });
       setReady(true);
     });
     return () => { disposed = true; renditionRef.current?.destroy(); epubRef.current?.destroy(); };
-  }, [applyAppearance, book.id, onProgress]);
+  }, [applyAppearance, book.id, onProgress, onLocation]);
+  useEffect(() => { if (jumpTo) renditionRef.current?.display(jumpTo); }, [jumpTo]);
 
   useEffect(() => {
     const current = renditionRef.current?.getContents() as unknown;
@@ -174,7 +200,7 @@ function EpubReader({ book, appearance, onProgress }: { book: Book; appearance: 
   return <div className="epub-reader"><button className="page-turn prev" aria-label="Previous page" onClick={() => renditionRef.current?.prev()}><ChevronLeft/></button><div ref={host} className="epub-host" style={hostStyle}/><button className="page-turn next" aria-label="Next page" onClick={() => renditionRef.current?.next()}><ChevronRight/></button>{!ready && <div className="reader-loading">Preparing pages…</div>}</div>;
 }
 
-function PdfReader({ book, onProgress }: { book: Book; onProgress: (progress: number) => void }) {
+function PdfReader({ book, onProgress, onLocation, jumpTo }: { book: Book; onProgress: (progress: number) => void; onLocation: (locator: string) => void; jumpTo?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [doc, setDoc] = useState<pdfjs.PDFDocumentProxy>();
   const [page, setPage] = useState(1);
@@ -194,9 +220,11 @@ function PdfReader({ book, onProgress }: { book: Book; onProgress: (progress: nu
       pdfPage.render({ canvas: target, canvasContext: context, viewport }).promise;
       const percentage = (page - 1) / Math.max(doc.numPages - 1, 1);
       onProgress(percentage);
+      onLocation(String(page));
       api.saveProgress(book.id, String(page), percentage).catch(() => undefined);
     });
     return () => { cancelled = true; };
-  }, [book.id, doc, page, onProgress]);
+  }, [book.id, doc, page, onProgress, onLocation]);
+  useEffect(() => { if (jumpTo) setPage(Number(jumpTo) || 1); }, [jumpTo]);
   return <div className="pdf-reader"><button className="page-turn prev" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft/></button><canvas ref={canvas}/><button className="page-turn next" disabled={!doc || page >= doc.numPages} onClick={() => setPage((current) => Math.min(doc?.numPages || current, current + 1))}><ChevronRight/></button><span className="pdf-page">Page {page} of {doc?.numPages || '…'}</span></div>;
 }

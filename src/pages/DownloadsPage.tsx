@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Download, LoaderCircle, Pause, Play, Search, Trash2, X } from 'lucide-react';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import type { CatalogBook, DownloadJob, Library } from '../types';
 
@@ -12,6 +12,10 @@ export function DownloadsPage() {
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [searching, setSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextPage, setNextPage] = useState<number>();
+  const [searchError, setSearchError] = useState('');
+  const searchRequest = useRef(0);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [toast, setToast] = useState<string>();
@@ -36,18 +40,24 @@ export function DownloadsPage() {
 
   const search = (event: FormEvent) => {
     event.preventDefault();
+    runSearch(1, true);
+  };
+  const runSearch = (page: number, replace: boolean) => {
     if (query.trim().length < 2) return;
-    setSearching(true);
+    const request = ++searchRequest.current;
+    if (replace) { setSearching(true); setSearchError(''); setWarnings([]); }
+    else setLoadingMore(true);
     setMessage('');
-    setWarnings([]);
-    api.catalogSearch(query)
+    api.catalogSearch(query, page)
       .then((response) => {
-        setResults(response.results);
+        if (request !== searchRequest.current) return;
+        setResults((current) => replace ? uniqueBooks(response.results) : uniqueBooks([...current, ...response.results]));
         setWarnings(response.warnings);
-        if (!response.results.length) setMessage('No downloadable Project Gutenberg EPUBs found.');
+        setNextPage(response.next_page);
+        if (replace && !response.results.length) setMessage('No downloadable Project Gutenberg EPUBs found.');
       })
-      .catch((error) => setMessage(error.message))
-      .finally(() => setSearching(false));
+      .catch((error) => { if (request === searchRequest.current) setSearchError(error.message || 'Project Gutenberg could not be reached.'); })
+      .finally(() => { if (request === searchRequest.current) { setSearching(false); setLoadingMore(false); } });
   };
 
   const queue = (book: CatalogBook) => {
@@ -90,12 +100,13 @@ export function DownloadsPage() {
       <div><Search size={20}/><input aria-label="Search downloadable EPUBs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Project Gutenberg by title or author…"/></div>
       <button className="primary-button" disabled={searching || query.trim().length < 2}>{searching ? <LoaderCircle className="spin"/> : <Search/>}Search</button>
     </form>
-    {message && <p className="download-message">{message}</p>}
+    {message && !searchError && <p className="download-message">{message}</p>}
+    {searchError && <p className="download-message" role="alert">{searchError} <button onClick={() => runSearch(results.length ? nextPage || 1 : 1, !results.length)}>Retry</button></p>}
     {warnings.map((warning) => <p className="download-warning" key={warning}>{warning}</p>)}
 
     {jobs.length > 0 && <section className="download-section" id="download-queue"><div className="section-heading"><h2>Download queue</h2>{historyJobs.length > 0 && <div className="download-history-actions"><button onClick={() => setShowHistory((value) => !value)}><ChevronDown className={showHistory ? 'history-open' : ''}/>{showHistory ? 'Hide' : 'Show'} completed ({historyJobs.length})</button>{showHistory && <button disabled={busy === 'clear-history'} onClick={clearHistory}><Trash2/>Clear completed</button>}</div>}</div>{visibleJobs.length > 0 ? <div className="job-list">{visibleJobs.map((job) => <article className="download-job" key={job.id}><div className="job-heading"><div><strong>{job.title}</strong><span>{job.authors.join(', ') || 'Unknown author'} · {job.provider}</span></div><span className={`job-status ${job.status}`}>{job.status}</span></div><div className="job-progress"><i style={{ width: `${Math.round(job.progress * 100)}%` }}/></div><div className="job-footer"><span>{job.error || job.message} · {formatBytes(job.bytes_downloaded)}{job.total_bytes ? ` of ${formatBytes(job.total_bytes)}` : ''} · {Math.round(job.progress * 100)}%</span><div>{['queued', 'downloading'].includes(job.status) && <button title="Pause" onClick={() => act(job, 'pause')}><Pause/></button>}{['paused', 'failed'].includes(job.status) && <button title="Resume" onClick={() => act(job, 'resume')}><Play/></button>}{!['completed', 'failed', 'cancelled'].includes(job.status) && <button title="Cancel" onClick={() => act(job, 'cancel')}><X/></button>}{['completed', 'failed', 'cancelled'].includes(job.status) && <button title="Remove from queue" onClick={() => act(job, 'delete')}><Trash2/></button>}</div></div></article>)}</div> : <p className="download-history-empty">No active downloads. Completed downloads are safely tucked into history.</p>}</section>}
 
-    <section className="download-section"><div className="section-heading"><h2>{results.length ? `${results.length} results` : 'Search Project Gutenberg'}</h2></div>{results.length > 0 && <div className="catalog-grid">{results.map((book) => {
+    <section className="download-section"><div className="section-heading"><h2>{results.length ? `${results.length} results` : searching ? 'Searching Project Gutenberg…' : 'Search Project Gutenberg'}</h2></div>{results.length > 0 && <div className="catalog-grid">{results.map((book) => {
       const key = `${book.provider}:${book.provider_id}`;
       const job = jobsByEdition.get(key);
       const isBusy = busy === key || busy === job?.id;
@@ -103,10 +114,14 @@ export function DownloadsPage() {
       const completed = job?.status === 'completed';
       const active = job && activeStatuses.includes(job.status);
       return <article className="catalog-card" key={key}>{book.cover_url ? <img src={book.cover_url} alt="" loading="lazy" referrerPolicy="no-referrer"/> : <div className="catalog-cover-placeholder"><Download/></div>}<div className="catalog-card-body"><span className="catalog-provider">{book.provider}</span><h3>{book.title}</h3><p className="catalog-author">{book.authors.join(', ') || 'Unknown author'}</p>{book.description && <p className="catalog-description">{book.description}</p>}<span className="catalog-license">{book.license_label}</span>{retryable ? <button className="primary-button" disabled={isBusy} onClick={() => act(job, 'resume')}>{isBusy ? <LoaderCircle className="spin"/> : <Play/>}Resume download</button> : <button className={`primary-button ${completed ? 'download-complete-button' : ''}`} disabled={isBusy || Boolean(active) || completed || !managedLibrary} onClick={() => queue(book)}>{isBusy ? <LoaderCircle className="spin"/> : completed ? <Check/> : active ? <LoaderCircle className="spin"/> : <Download/>}{completed ? 'Added to library' : active ? `${job.message} · ${Math.round(job.progress * 100)}%` : 'Add to library'}</button>}</div></article>;
-    })}</div>}</section>
+    })}</div>}{results.length > 0 && nextPage && <button className="secondary-button" disabled={loadingMore} onClick={() => runSearch(nextPage, false)}>{loadingMore ? <LoaderCircle className="spin"/> : 'Load more'}</button>}</section>
 
     {toast && <aside className="download-toast" role="status"><Check/><span>{toast}</span><button onClick={viewQueue}>View queue</button><button aria-label="Dismiss notification" onClick={() => setToast(undefined)}><X/></button></aside>}
   </div>;
+}
+
+export function uniqueBooks(books: CatalogBook[]) {
+  return [...new Map(books.map((book) => [`${book.provider}:${book.provider_id}`, book])).values()];
 }
 
 function formatBytes(bytes: number) {

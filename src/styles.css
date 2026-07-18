@@ -979,6 +979,15 @@ h2 {
   color: var(--muted);
 }
 
+.reader-bookmarks { position: fixed; z-index: 30; top: 64px; right: 16px; width: min(320px, calc(100vw - 32px)); max-height: 50vh; overflow: auto; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: 0 16px 40px #0006; }
+.reader-bookmarks h3 { margin: 0 0 10px; }
+.reader-bookmarks ul { padding: 0; margin: 0; list-style: none; }
+.reader-bookmarks li { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+.reader-bookmarks li button:first-child { flex: 1; text-align: left; }
+.reader-bookmarks button { background: transparent; color: inherit; border: 0; cursor: pointer; }
+.reader-bookmark-error { position: fixed; z-index: 35; top: 70px; left: 50%; transform: translateX(-50%); max-width: min(520px, calc(100vw - 30px)); margin: 0; padding: 9px 14px; border-radius: 8px; background: #8d3030; color: white; }
+.reader-top .bookmark-selected { color: var(--lavender); }
+
 @media (max-width: 760px) {
   .app-shell {
     display: block;

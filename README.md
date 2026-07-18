@@ -8,6 +8,14 @@
 
 sTori turns a Windows PC into a private ebook library server. Read on the desktop, pair an iPhone over the local network, and keep books, metadata, collections, and reading progress under your control.
 
+<p align="center">
+  <img src="docs/images/stori-windows-library.jpg" alt="sTori's Windows library, with genre rows and the desktop sidebar" width="760" />
+</p>
+
+<p align="center">
+  <img src="docs/images/stori-iphone-home.jpg" alt="sTori's paired iPhone reading-room home screen" width="280" />
+</p>
+
 <p>
   <a href="https://github.com/sudoaanish/sTori/releases">
     <img src="https://img.shields.io/badge/Version-v0.1.3%20Preview-34206B?style=for-the-badge&logo=github" alt="sTori v0.1.3 preview" />
@@ -43,7 +51,7 @@ sTori turns a Windows PC into a private ebook library server. Read on the deskto
 ## Features
 
 - Tauri 2 desktop application with a Rust/Axum server on port `1822`
-- SQLite catalog, reading progress, annotations, collections, and series
+- SQLite catalog, reading progress, bookmarks, collections, and series
 - Read-only scanning of existing ebook libraries
 - EPUB and PDF reading (MOBI is not currently supported)
 - Project Gutenberg discovery and managed EPUB downloads

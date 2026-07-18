@@ -633,12 +633,22 @@ impl Database {
 }
 
 #[cfg(windows)]
+fn hidden_windows_command(program: &str) -> std::process::Command {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = std::process::Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(windows)]
 fn firewall_rule_detected() -> Option<bool> {
     let executable = std::env::current_exe()
         .ok()?
         .to_string_lossy()
         .to_ascii_lowercase();
-    let output = std::process::Command::new("netsh")
+    let output = hidden_windows_command("netsh")
         .args([
             "advfirewall",
             "firewall",

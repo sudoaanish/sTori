@@ -53,11 +53,6 @@ impl ServerState {
     }
 }
 
-pub async fn run(state: ServerState, dist: PathBuf) -> std::io::Result<()> {
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", PORT)).await?;
-    run_with_listener(state, dist, listener).await
-}
-
 pub async fn run_with_std_listener(
     state: ServerState,
     dist: PathBuf,

@@ -3,14 +3,14 @@ use crate::{
     downloads::DownloadManager,
     error::{AppError, Result},
     models::*,
-    scanner::scan_library,
+    scanner::scan_library_with_cache,
 };
 use axum::{
     body::Body,
     extract::{ConnectInfo, Path as AxPath, Query, State},
     http::{header, HeaderMap},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use parking_lot::Mutex;
@@ -39,16 +39,19 @@ pub struct ServerState {
     pairings: Arc<Mutex<HashMap<String, Instant>>>,
     pairing_attempts: Arc<Mutex<HashMap<IpAddr, Vec<Instant>>>>,
     managed_library: PathBuf,
+    cover_cache: PathBuf,
 }
 impl ServerState {
-    pub fn new(db: Database, managed_library: PathBuf) -> Self {
-        let downloads = DownloadManager::new(db.clone(), managed_library.clone());
+    pub fn new(db: Database, managed_library: PathBuf, cover_cache: PathBuf) -> Self {
+        let downloads =
+            DownloadManager::new(db.clone(), managed_library.clone(), cover_cache.clone());
         Self {
             db,
             downloads,
             pairings: Arc::new(Mutex::new(HashMap::new())),
             pairing_attempts: Arc::new(Mutex::new(HashMap::new())),
             managed_library,
+            cover_cache,
         }
     }
 }
@@ -71,7 +74,6 @@ async fn run_with_listener(
     if let Err(error) = state.downloads.bootstrap().await {
         tracing::warn!("Could not prepare starter shelf: {error}");
     }
-    spawn_library_monitor(state.clone());
     let index = dist.join("index.html");
     let static_service = ServeDir::new(dist).not_found_service(ServeFile::new(index));
     let app = Router::new()
@@ -79,6 +81,10 @@ async fn run_with_listener(
         .route("/api/auth/pair", post(pair))
         .route("/api/auth/session", get(session))
         .route("/api/admin/libraries", get(libraries).post(add_library))
+        .route(
+            "/api/admin/libraries/{id}",
+            put(update_library).delete(remove_library),
+        )
         .route("/api/admin/libraries/{id}/scan", post(scan))
         .route("/api/admin/connectivity", get(connectivity))
         .route("/api/admin/pairing", post(create_pairing))
@@ -203,6 +209,24 @@ async fn add_library(
     admin(a)?;
     Ok(Json(s.db.add_library(&r.name, &r.path)?))
 }
+async fn update_library(
+    State(s): State<ServerState>,
+    ConnectInfo(a): ConnectInfo<SocketAddr>,
+    AxPath(id): AxPath<i64>,
+    Json(r): Json<UpdateLibraryRequest>,
+) -> Result<Json<LibraryDto>> {
+    admin(a)?;
+    Ok(Json(s.db.rename_library(id, &r.name)?))
+}
+async fn remove_library(
+    State(s): State<ServerState>,
+    ConnectInfo(a): ConnectInfo<SocketAddr>,
+    AxPath(id): AxPath<i64>,
+) -> Result<Json<serde_json::Value>> {
+    admin(a)?;
+    s.db.remove_library(id)?;
+    Ok(Json(json!({"ok": true})))
+}
 
 #[derive(Deserialize)]
 struct CatalogQuery {
@@ -285,9 +309,12 @@ async fn scan(
 ) -> Result<Json<ScanResult>> {
     admin(a)?;
     let root = s.db.library_path(id)?;
-    let (books, warnings) = tokio::task::spawn_blocking(move || scan_library(Path::new(&root)))
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let cover_cache = s.cover_cache.clone();
+    let (books, warnings) = tokio::task::spawn_blocking(move || {
+        scan_library_with_cache(Path::new(&root), Some(&cover_cache))
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?;
     let indexed = books.len();
     s.db.store_scan(id, &books)?;
     Ok(Json(ScanResult { indexed, warnings }))
@@ -304,10 +331,12 @@ async fn rescan_all(
     let mut warnings = Vec::new();
     for library in &libraries {
         let root = library.path.clone();
-        let (books, library_warnings) =
-            tokio::task::spawn_blocking(move || scan_library(Path::new(&root)))
-                .await
-                .map_err(|e| AppError::Internal(e.to_string()))?;
+        let cover_cache = s.cover_cache.clone();
+        let (books, library_warnings) = tokio::task::spawn_blocking(move || {
+            scan_library_with_cache(Path::new(&root), Some(&cover_cache))
+        })
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
         indexed += books.len();
         warnings.extend(library_warnings);
         s.db.store_scan(library.id, &books)?;
@@ -649,67 +678,4 @@ async fn create_backup(
 ) -> Result<Json<BackupDto>> {
     admin(a)?;
     Ok(Json(s.db.create_manual_backup()?))
-}
-
-fn spawn_library_monitor(state: ServerState) {
-    tokio::spawn(async move {
-        let mut fingerprints: HashMap<i64, (u64, u64)> = HashMap::new();
-        loop {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-            let libraries = match state.db.libraries() {
-                Ok(rows) => rows,
-                Err(_) => continue,
-            };
-            for library in libraries {
-                let path = library.path.clone();
-                let fingerprint =
-                    tokio::task::spawn_blocking(move || library_fingerprint(Path::new(&path)))
-                        .await
-                        .ok();
-                if let Some(fingerprint) = fingerprint {
-                    let changed = fingerprints
-                        .insert(library.id, fingerprint)
-                        .map(|old| old != fingerprint)
-                        .unwrap_or(false);
-                    if changed {
-                        let root = library.path.clone();
-                        let id = library.id;
-                        let db = state.db.clone();
-                        tokio::task::spawn_blocking(move || {
-                            let (books, _) = scan_library(Path::new(&root));
-                            let _ = db.store_scan(id, &books);
-                        });
-                    }
-                }
-            }
-        }
-    });
-}
-
-fn library_fingerprint(root: &Path) -> (u64, u64) {
-    let mut count = 0;
-    let mut newest = 0;
-    for entry in walkdir::WalkDir::new(root)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-    {
-        let ext = entry
-            .path()
-            .extension()
-            .and_then(|x| x.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if ["epub", "pdf", "opf", "jpg", "jpeg", "png"].contains(&ext.as_str()) {
-            count += 1;
-            if let Ok(metadata) = entry.metadata() {
-                if let Ok(modified) = metadata.modified() {
-                    if let Ok(ts) = modified.duration_since(std::time::UNIX_EPOCH) {
-                        newest = newest.max(ts.as_secs());
-                    }
-                }
-            }
-        }
-    }
-    (count, newest)
 }

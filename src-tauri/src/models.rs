@@ -66,6 +66,11 @@ pub struct AddLibraryRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct UpdateLibraryRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CollectionRequest {
     pub name: String,
     pub description: Option<String>,

@@ -36,7 +36,7 @@ pub fn run() {
             let database =
                 db::Database::open(&data_dir.join("stori.db")).map_err(|e| e.to_string())?;
             let managed_library = std::env::var_os("STORI_MANAGED_LIBRARY_DIR").map(PathBuf::from).unwrap_or(app.path().download_dir()?.join("sTori Books"));
-            let state = server::ServerState::new(database, managed_library);
+            let state = server::ServerState::new(database, managed_library, data_dir.join("cover-cache"));
             let resource_dir = app.path().resource_dir()?;
             let dev_dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .parent()

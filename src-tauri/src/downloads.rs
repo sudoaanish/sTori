@@ -2,7 +2,7 @@ use crate::{
     db::Database,
     error::{AppError, Result},
     models::{CatalogBookDto, CatalogSearchDto, DownloadJobDto},
-    scanner::scan_library,
+    scanner::scan_library_with_cache,
 };
 use futures_util::StreamExt;
 use parking_lot::Mutex;
@@ -68,10 +68,11 @@ pub struct DownloadManager {
     client: Client,
     controls: Arc<Mutex<HashMap<String, Arc<JobControl>>>>,
     managed_library_path: PathBuf,
+    cover_cache: PathBuf,
 }
 
 impl DownloadManager {
-    pub fn new(db: Database, managed_library_path: PathBuf) -> Self {
+    pub fn new(db: Database, managed_library_path: PathBuf, cover_cache: PathBuf) -> Self {
         let client = Client::builder()
             .user_agent(concat!(
                 "sTori/",
@@ -93,6 +94,7 @@ impl DownloadManager {
             client,
             controls: Arc::new(Mutex::new(HashMap::new())),
             managed_library_path,
+            cover_cache,
         }
     }
 
@@ -101,9 +103,12 @@ impl DownloadManager {
         self.cleanup_interrupted_imports().await?;
         let library = self.db.ensure_managed_library(&self.managed_library_path)?;
         let scan_root = self.managed_library_path.clone();
-        let (existing_books, _) = tokio::task::spawn_blocking(move || scan_library(&scan_root))
-            .await
-            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let cover_cache = self.cover_cache.clone();
+        let (existing_books, _) = tokio::task::spawn_blocking(move || {
+            scan_library_with_cache(&scan_root, Some(&cover_cache))
+        })
+        .await
+        .map_err(|error| AppError::Internal(error.to_string()))?;
         self.db.store_scan(library.id, &existing_books)?;
         if self.db.setting("starter_pack_version")?.as_deref() != Some("1") {
             for book in starter_books() {
@@ -566,9 +571,12 @@ impl DownloadManager {
             None,
         )?;
         let scan_dir = dir.clone();
-        let (books, _) = tokio::task::spawn_blocking(move || scan_library(&scan_dir))
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let cover_cache = self.cover_cache.clone();
+        let (books, _) = tokio::task::spawn_blocking(move || {
+            scan_library_with_cache(&scan_dir, Some(&cover_cache))
+        })
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
         self.db.store_incremental(job.library_id, &books)?;
         self.db.update_download_job(
             id,
@@ -1019,7 +1027,11 @@ mod tests {
         let library = db
             .add_library("Temporary", temp.path().to_str().unwrap())
             .unwrap();
-        let manager = DownloadManager::new(db.clone(), temp.path().join("sTori Books"));
+        let manager = DownloadManager::new(
+            db.clone(),
+            temp.path().join("sTori Books"),
+            temp.path().join("cover-cache"),
+        );
         let job = manager
             .queue(
                 library.id,
@@ -1060,7 +1072,11 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let library_path = temp.path().join("Downloads").join("sTori Books");
         let db = Database::open(&temp.path().join("starter.db")).unwrap();
-        let manager = DownloadManager::new(db.clone(), library_path.clone());
+        let manager = DownloadManager::new(
+            db.clone(),
+            library_path.clone(),
+            temp.path().join("cover-cache"),
+        );
         manager.bootstrap().await.unwrap();
         for _ in 0..160 {
             let jobs = manager.jobs().unwrap();
@@ -1082,7 +1098,11 @@ mod tests {
                     .join("cover.jpg")
                     .exists());
                 let second_db = Database::open(&temp.path().join("second.db")).unwrap();
-                let second_manager = DownloadManager::new(second_db.clone(), library_path.clone());
+                let second_manager = DownloadManager::new(
+                    second_db.clone(),
+                    library_path.clone(),
+                    temp.path().join("second-cover-cache"),
+                );
                 second_manager.bootstrap().await.unwrap();
                 assert!(second_manager.jobs().unwrap().is_empty());
                 assert_eq!(second_db.books("", None).unwrap().len(), 2);

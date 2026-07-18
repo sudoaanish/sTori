@@ -80,6 +80,43 @@ impl Database {
             .ok_or(AppError::NotFound)
     }
 
+    pub fn rename_library(&self, id: i64, name: &str) -> Result<LibraryDto> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(AppError::BadRequest("A library needs a name".into()));
+        }
+        let changed = self.0.lock().execute(
+            "UPDATE libraries SET name=?1 WHERE id=?2",
+            params![name, id],
+        )?;
+        if changed == 0 {
+            return Err(AppError::NotFound);
+        }
+        self.libraries()?
+            .into_iter()
+            .find(|library| library.id == id)
+            .ok_or(AppError::NotFound)
+    }
+
+    pub fn remove_library(&self, id: i64) -> Result<()> {
+        let managed_library_id = id.to_string();
+        if self.setting("managed_download_library_id")?.as_deref()
+            == Some(managed_library_id.as_str())
+        {
+            return Err(AppError::BadRequest(
+                "The managed sTori Books library cannot be removed.".into(),
+            ));
+        }
+        let changed = self
+            .0
+            .lock()
+            .execute("DELETE FROM libraries WHERE id=?1", [id])?;
+        if changed == 0 {
+            return Err(AppError::NotFound);
+        }
+        Ok(())
+    }
+
     pub fn setting(&self, key: &str) -> Result<Option<String>> {
         Ok(self
             .0
@@ -930,6 +967,31 @@ mod tests {
             copy.setting("backup-test").unwrap().as_deref(),
             Some("preserved")
         );
+    }
+
+    #[test]
+    fn renames_and_removes_only_unmanaged_libraries() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Database::open(&temp.path().join("stori.db")).unwrap();
+        let source = temp.path().join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        let library = db
+            .add_library("Original name", source.to_str().unwrap())
+            .unwrap();
+        assert_eq!(
+            db.rename_library(library.id, "Renamed").unwrap().name,
+            "Renamed"
+        );
+        db.remove_library(library.id).unwrap();
+        assert!(
+            source.is_dir(),
+            "removing a library must not delete its folder"
+        );
+
+        let managed = db
+            .ensure_managed_library(&temp.path().join("managed"))
+            .unwrap();
+        assert!(db.remove_library(managed.id).is_err());
     }
 
     #[test]

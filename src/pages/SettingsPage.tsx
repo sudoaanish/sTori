@@ -1,4 +1,4 @@
-import { CheckCircle2, Database, Download, FolderOpen, HardDrive, LoaderCircle, QrCode, RefreshCw, Server, ShieldCheck, Smartphone, Trash2, Wifi } from 'lucide-react';
+import { CheckCircle2, Database, Download, FolderOpen, HardDrive, LoaderCircle, Pencil, QrCode, RefreshCw, Server, ShieldCheck, Smartphone, Trash2, Wifi } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
@@ -14,8 +14,11 @@ export function SettingsPage() {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('My Books');
   const [path, setPath] = useState('');
+  const [editing, setEditing] = useState<Library>();
+  const [editName, setEditName] = useState('');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
+  const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [startWithWindows, setStartWithWindows] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'installing' | 'current' | 'failed'>('idle');
   const [updateMessage, setUpdateMessage] = useState('');
@@ -97,12 +100,29 @@ export function SettingsPage() {
   };
 
   const add = () => {
-    setBusy('add-library'); setMessage('');
+    setBusy('add-library'); setMessage(''); setScanWarnings([]);
     api.addLibrary(name, path)
       .then((library) => api.scanLibrary(library.id))
-      .then((result) => { setAdding(false); setMessage(`Indexed ${result.indexed} books${result.warnings.length ? ` with ${result.warnings.length} warnings` : ''}.`); return load(); })
+      .then((result) => { setAdding(false); reportScan(result); return load(); })
       .catch((error) => setMessage(error.message))
       .finally(() => setBusy(''));
+  };
+
+  const reportScan = (result: { indexed: number; warnings: string[] }) => {
+    setScanWarnings(result.warnings);
+    setMessage(`Indexed ${result.indexed} books${result.warnings.length ? ` with ${result.warnings.length} item${result.warnings.length === 1 ? '' : 's'} to review` : ''}.`);
+  };
+
+  const beginEdit = (library: Library) => { setEditing(library); setEditName(library.name); };
+  const saveEdit = () => {
+    if (!editing) return;
+    setBusy(`edit-${editing.id}`); setMessage('');
+    api.updateLibrary(editing.id, editName).then((library) => { setEditing(undefined); setMessage(`Updated ${library.name}.`); return load(); }).catch((error) => setMessage(error.message)).finally(() => setBusy(''));
+  };
+  const removeLibrary = (library: Library) => {
+    if (!window.confirm(`Remove “${library.name}” from sTori? This only removes its catalog entry. Your files at ${library.path} will not be deleted.`)) return;
+    setBusy(`remove-${library.id}`); setMessage('');
+    api.removeLibrary(library.id).then(() => { setMessage(`Removed ${library.name} from sTori. Your files were not changed.`); return load(); }).catch((error) => setMessage(error.message)).finally(() => setBusy(''));
   };
 
   const pair = () => {
@@ -146,10 +166,12 @@ export function SettingsPage() {
 
     <section className="settings-section"><div className="section-heading"><div><span className="eyebrow">Recovery</span><h2>Database & diagnostics</h2></div><button className="primary-button" disabled={busy === 'backup'} onClick={backup}>{busy === 'backup' ? <LoaderCircle className="spin"/> : <Database/>}Back up now</button></div><div className="diagnostic-grid"><article><ShieldCheck/><div><strong>Database {diagnostics?.database_status === 'ok' ? 'healthy' : 'needs attention'}</strong><span>Schema version {diagnostics?.schema_version ?? '—'}</span><code>{diagnostics?.database_path}</code></div></article><article><HardDrive/><div><strong>{formatBytes(diagnostics?.managed_library_free_bytes)} free</strong><span>Managed book storage</span><code>{diagnostics?.backup_directory}</code></div></article><article><Wifi/><div><strong>{diagnostics?.firewall_rule_detected === true ? 'Firewall permission detected' : diagnostics?.firewall_rule_detected === false ? 'Firewall permission not detected' : 'Check firewall permission'}</strong><span>{diagnostics?.firewall_guidance || 'Checking Windows Firewall…'}</span><code>TCP port 1822</code></div></article></div>{backups.length > 0 && <div className="backup-list"><strong>Recent backups</strong>{backups.slice(0, 5).map((entry) => <div key={entry.path}><span>{entry.file_name}</span><small>{formatBytes(entry.size_bytes)} · {new Date(entry.created_at).toLocaleString()}</small></div>)}</div>}</section>
 
-    <section className="library-settings"><div className="section-heading"><div><span className="eyebrow">Book storage</span><h2>Libraries</h2></div><button className="primary-button" onClick={() => setAdding(true)}>+ Add library</button></div>{libraries.map((library) => { const available = diagnostics?.libraries.find((item) => item.id === library.id)?.available ?? true; return <article className="library-card" key={library.id}><FolderOpen/><div><strong>{library.name}</strong><code>{library.path}</code><span>{library.book_count} books · {available ? (library.last_scanned_at ? `Last scan ${new Date(library.last_scanned_at).toLocaleString()}` : 'Not scanned') : 'Folder unavailable'}</span></div><button className="secondary-button" disabled={busy === `scan-${library.id}` || !available} onClick={() => { setBusy(`scan-${library.id}`); api.scanLibrary(library.id).then((result) => { setMessage(`Indexed ${result.indexed} books.`); return load(); }).catch((error) => setMessage(error.message)).finally(() => setBusy('')); }}>{busy === `scan-${library.id}` ? <LoaderCircle className="spin"/> : <RefreshCw/>}Scan</button></article>; })}{!libraries.length && <div className="empty-state compact">No libraries configured.</div>}</section>
+    <section className="library-settings"><div className="section-heading"><div><span className="eyebrow">Book storage</span><h2>Libraries</h2></div><button className="primary-button" onClick={() => setAdding(true)}>+ Add library</button></div>{libraries.map((library) => { const available = diagnostics?.libraries.find((item) => item.id === library.id)?.available ?? true; return <article className="library-card" key={library.id}><FolderOpen/><div><strong>{library.name}{library.managed && <em className="managed-library-label">Managed</em>}</strong><code>{library.path}</code><span>{library.book_count} books · {available ? (library.last_scanned_at ? `Last scan ${new Date(library.last_scanned_at).toLocaleString()}` : 'Not scanned') : 'Folder unavailable'}</span></div><div className="library-actions"><button className="secondary-button" disabled={busy === `scan-${library.id}` || !available} onClick={() => { setBusy(`scan-${library.id}`); setScanWarnings([]); api.scanLibrary(library.id).then((result) => { reportScan(result); return load(); }).catch((error) => setMessage(error.message)).finally(() => setBusy('')); }}>{busy === `scan-${library.id}` ? <LoaderCircle className="spin"/> : <RefreshCw/>}Scan</button><button className="secondary-button icon-button" aria-label={`Edit ${library.name}`} disabled={library.managed} onClick={() => beginEdit(library)}><Pencil/></button><button className="secondary-button danger-button icon-button" aria-label={`Remove ${library.name}`} disabled={library.managed || busy === `remove-${library.id}`} onClick={() => removeLibrary(library)}>{busy === `remove-${library.id}` ? <LoaderCircle className="spin"/> : <Trash2/>}</button></div></article>; })}{!libraries.length && <div className="empty-state compact">No libraries configured.</div>}</section>
     {message && <p className="status-message settings-global-message">{message}</p>}
+    {scanWarnings.length > 0 && <details className="scan-warnings"><summary>{scanWarnings.length} scan item{scanWarnings.length === 1 ? '' : 's'} to review</summary><ul>{scanWarnings.slice(0, 12).map((warning) => <li key={warning}>{warning}</li>)}</ul>{scanWarnings.length > 12 && <small>Showing the first 12 items.</small>}</details>}
 
     {adding && <div className="modal-backdrop"><div className="modal"><h2>Add library</h2><label>Name<input value={name} onChange={(event) => setName(event.target.value)}/></label><label>Folder<div className="path-input"><input value={path} placeholder="Choose a folder…" onChange={(event) => setPath(event.target.value)}/><button onClick={browse}>Browse…</button></div></label><div className="option-list"><label><input type="checkbox" checked readOnly/>Read metadata.opf and EPUB metadata</label><label><input type="checkbox" checked readOnly/>Use cover.jpg or folder.jpg</label></div><div className="modal-actions"><button className="secondary-button" onClick={() => setAdding(false)}>Cancel</button><button className="primary-button" disabled={busy === 'add-library' || !path.trim()} onClick={add}>{busy === 'add-library' && <LoaderCircle className="spin"/>}Add & scan</button></div></div></div>}
+    {editing && <div className="modal-backdrop"><div className="modal"><h2>Edit library</h2><p>Rename this library in sTori. Its folder and files will not be moved or changed.</p><label>Name<input autoFocus value={editName} onChange={(event) => setEditName(event.target.value)}/></label><label>Folder<code className="library-path-readonly">{editing.path}</code></label><div className="modal-actions"><button className="secondary-button" onClick={() => setEditing(undefined)}>Cancel</button><button className="primary-button" disabled={busy === `edit-${editing.id}` || !editName.trim()} onClick={saveEdit}>{busy === `edit-${editing.id}` && <LoaderCircle className="spin"/>}Save changes</button></div></div></div>}
   </div>;
 }
 

@@ -9,8 +9,8 @@
 sTori turns a Windows PC into a private ebook library server. Read on the desktop, pair an iPhone over the local network, and keep books, metadata, collections, and reading progress under your control.
 
 <p align="center">
-  <img src="docs/images/stori-windows-library.jpg" alt="sTori's Windows library, with genre rows and the desktop sidebar" width="560" />
-  <img src="docs/images/stori-iphone-home.jpg" alt="sTori's paired iPhone reading-room home screen" width="188" />
+  <img src="docs/images/stori-windows-library.jpg" alt="sTori's Windows library, with genre rows and the desktop sidebar" height="320" />
+  <img src="docs/images/stori-iphone-home.jpg" alt="sTori's paired iPhone reading-room home screen" height="320" />
 </p>
 
 <p>

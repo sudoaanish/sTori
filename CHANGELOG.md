@@ -2,6 +2,10 @@
 
 All notable changes to sTori will be documented here.
 
+## 0.1.3 - Visible desktop updater
+
+- Added the **Updates** panel to the visible Windows **Server & Libraries** page, with manual check and verified install controls.
+
 ## 0.1.2 - PWA serving hotfix
 
 - Fixed the packaged Windows server locating its bundled web assets after NSIS installation. iPhone and browser readers now receive the app shell instead of a blank page.

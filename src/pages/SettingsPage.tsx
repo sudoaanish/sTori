@@ -1,4 +1,4 @@
-import { CheckCircle2, Database, FolderOpen, HardDrive, LoaderCircle, QrCode, RefreshCw, Server, ShieldCheck, Smartphone, Trash2, Wifi } from 'lucide-react';
+import { CheckCircle2, Database, Download, FolderOpen, HardDrive, LoaderCircle, QrCode, RefreshCw, Server, ShieldCheck, Smartphone, Trash2, Wifi } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
@@ -17,6 +17,8 @@ export function SettingsPage() {
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [startWithWindows, setStartWithWindows] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'installing' | 'current' | 'failed'>('idle');
+  const [updateMessage, setUpdateMessage] = useState('');
   const isDesktop = isTauri();
 
   const load = () => Promise.all([api.libraries(), api.connectivity(), api.pairedDevices(), api.diagnostics(), api.backups()])
@@ -42,6 +44,46 @@ export function SettingsPage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not change the Windows startup setting.');
     } finally { setBusy(''); }
+  };
+
+  const checkForUpdates = async () => {
+    if (!isDesktop) return;
+    setUpdateStatus('checking');
+    setUpdateMessage('Checking for an update…');
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (!update) {
+        setUpdateStatus('current');
+        setUpdateMessage('sTori is up to date.');
+        return;
+      }
+      setUpdateStatus('available');
+      setUpdateMessage(`sTori v${update.version} is ready to install.`);
+    } catch {
+      setUpdateStatus('failed');
+      setUpdateMessage('Could not check for updates. Try again later.');
+    }
+  };
+
+  const installUpdate = async () => {
+    setUpdateStatus('installing');
+    setUpdateMessage('Downloading and installing the update…');
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (!update) {
+        setUpdateStatus('current');
+        setUpdateMessage('sTori is already up to date.');
+        return;
+      }
+      await update.downloadAndInstall();
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    } catch {
+      setUpdateStatus('failed');
+      setUpdateMessage('The update could not be installed. Your current sTori is unchanged.');
+    }
   };
 
   const browse = async () => {
@@ -97,6 +139,8 @@ export function SettingsPage() {
     </section>
 
     {isDesktop && <section className="settings-section"><div className="section-heading"><div><span className="eyebrow">Desktop behavior</span><h2>Windows startup</h2></div></div><div className="startup-setting"><div><strong>Start sTori with Windows</strong><span>Launch the server minimized to the system tray after you sign in. Closing the window also keeps the server available in the tray.</span></div><button className={startWithWindows ? 'primary-button' : 'secondary-button'} disabled={busy === 'autostart'} onClick={() => setAutostart(!startWithWindows)}>{busy === 'autostart' && <LoaderCircle className="spin"/>}{startWithWindows ? 'On' : 'Off'}</button></div></section>}
+
+    {isDesktop && <section className="settings-section"><div className="section-heading"><div><span className="eyebrow">Desktop updates</span><h2>Updates</h2></div></div><div className="startup-setting"><div><strong>Signed updates from GitHub Releases</strong><span>Updates are verified before installation, then sTori restarts automatically.</span>{updateMessage && <span className="settings-status" role="status">{updateMessage}</span>}</div>{updateStatus === 'available' ? <button className="primary-button" onClick={installUpdate}><Download/>Install update</button> : <button className="secondary-button" disabled={updateStatus === 'checking' || updateStatus === 'installing'} onClick={checkForUpdates}>{updateStatus === 'checking' || updateStatus === 'installing' ? <LoaderCircle className="spin"/> : <RefreshCw/>}{updateStatus === 'checking' ? 'Checking…' : updateStatus === 'installing' ? 'Installing…' : 'Check for updates'}</button>}</div></section>}
 
     <section className="settings-section"><div className="section-heading"><div><span className="eyebrow">Access control</span><h2>Paired devices</h2></div>{devices.length > 1 && <button className="secondary-button danger-button" disabled={busy === 'revoke-all'} onClick={revokeAll}><Trash2/>Revoke all</button>}</div>{devices.length ? <div className="device-list">{devices.map((device) => <article className="device-card" key={device.id}><Smartphone/><div><strong>{device.name}</strong><span>Last seen {new Date(device.last_seen_at).toLocaleString()}{device.last_ip ? ` · ${device.last_ip}` : ''}</span><small>Paired {new Date(device.created_at).toLocaleDateString()}</small></div><button className="secondary-button danger-button" disabled={busy === device.id} onClick={() => revoke(device)}>{busy === device.id ? <LoaderCircle className="spin"/> : <Trash2/>}Revoke</button></article>)}</div> : <div className="empty-state compact">No iPhones are currently paired.</div>}</section>
 

@@ -105,7 +105,7 @@ The starter downloads run in the background. Their state is visible under **Down
 4. Select **Browse…** and choose the folder that directly contains the books or author folders.
 5. Select **Add & scan**.
 
-sTori reads supported book metadata and cover files without reorganizing or modifying the source library. Use **Scan** beside a library—or **Refresh / rescan library** in Settings—after adding or changing books.
+sTori reads sidecar metadata and cover files when present, then falls back to metadata and cover art embedded inside EPUBs. Extracted covers are cached in sTori’s application data; source libraries are never reorganized or modified. Use **Scan** beside a library—or **Refresh / rescan library** in Settings—after adding or changing books.
 
 ### Read and resume a book
 

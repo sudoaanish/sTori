@@ -2,6 +2,13 @@
 
 All notable changes to sTori will be documented here.
 
+## 0.1.4 - Library intelligence
+
+- Read embedded EPUB metadata and cover images when sidecar OPF or cover files are absent.
+- Cache extracted covers in sTori application data without modifying source libraries.
+- Added safe library rename and removal controls; source files are never deleted and the managed download library is protected.
+- Added a reviewable scan-warning panel and removed the remaining background library watcher.
+
 ## 0.1.3 - Release hardening
 
 - Added the **Updates** panel to the visible Windows **Server & Libraries** page, with manual check and verified install controls.

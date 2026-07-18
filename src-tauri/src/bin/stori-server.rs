@@ -26,9 +26,12 @@ async fn main() {
     let managed_library = dirs::download_dir()
         .unwrap_or_else(|| root.join("Downloads"))
         .join("sTori Books");
-    server::run(
-        server::ServerState::new(database, managed_library),
+    let listener = std::net::TcpListener::bind(("0.0.0.0", server::PORT))
+        .expect("bind sTori development server");
+    server::run_with_std_listener(
+        server::ServerState::new(database, managed_library, data.join("cover-cache")),
         root.join("dist"),
+        listener,
     )
     .await
     .expect("run sTori server");

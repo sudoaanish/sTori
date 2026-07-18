@@ -28,6 +28,8 @@ export const api = {
   session: () => request<{ ok: boolean }>('/api/auth/session'),
   libraries: () => request<Library[]>('/api/admin/libraries'),
   addLibrary: (name: string, path: string) => request<Library>('/api/admin/libraries', { method: 'POST', body: JSON.stringify({ name, path }) }),
+  updateLibrary: (id: number, name: string) => request<Library>(`/api/admin/libraries/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  removeLibrary: (id: number) => request<{ ok: boolean }>(`/api/admin/libraries/${id}`, { method: 'DELETE' }),
   scanLibrary: (id: number) => request<{ indexed: number; warnings: string[] }>(`/api/admin/libraries/${id}/scan`, { method: 'POST' }),
   books: (query = '', filters: Record<string, string> = {}) => {
     const params = new URLSearchParams({ q: query, ...filters });

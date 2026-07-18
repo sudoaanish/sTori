@@ -2,9 +2,12 @@
 
 All notable changes to sTori will be documented here.
 
-## 0.1.3 - Visible desktop updater
+## 0.1.3 - Release hardening
 
 - Added the **Updates** panel to the visible Windows **Server & Libraries** page, with manual check and verified install controls.
+- Removed short-lived Windows console flashes from startup, firewall, and port-conflict checks.
+- Kept Settings and download administration desktop-only at both the frontend route and server API layers.
+- Added Windows and iPhone product screenshots to the README.
 
 ## 0.1.2 - PWA serving hotfix
 

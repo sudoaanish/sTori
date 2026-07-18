@@ -15,7 +15,7 @@ sTori turns a Windows PC into a private ebook library server. Read on the deskto
 
 <p>
   <a href="https://github.com/sudoaanish/sTori/releases">
-    <img src="https://img.shields.io/badge/Version-v0.1.3%20Preview-34206B?style=for-the-badge&logo=github" alt="sTori v0.1.3 preview" />
+    <img src="https://img.shields.io/badge/Version-v0.1.3-34206B?style=for-the-badge&logo=github" alt="sTori v0.1.3" />
   </a>
   <a href="https://github.com/sudoaanish/sTori/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/sudoaanish/sTori?style=for-the-badge" alt="MIT license" />

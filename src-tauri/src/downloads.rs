@@ -1,5 +1,6 @@
 use crate::{
     db::Database,
+    epub_validation::{read_validated_entry, validate_new_epub, MAX_RESOURCE_BYTES},
     error::{AppError, Result},
     models::{CatalogBookDto, CatalogSearchDto, DownloadJobDto},
     scanner::scan_library_with_cache,
@@ -325,6 +326,8 @@ impl DownloadManager {
         let manager = self.clone();
         tokio::spawn(async move {
             if let Err(error) = manager.run_job(&id, &control).await {
+                let part = std::env::temp_dir().join("stori-downloads").join(format!("{id}.epub.part"));
+                let _ = tokio::fs::remove_file(part).await;
                 if !control.pause.load(Ordering::Relaxed) && !control.cancel.load(Ordering::Relaxed)
                 {
                     let job = manager.db.download_job(&id).ok();
@@ -698,35 +701,14 @@ struct ImportedMetadata {
 }
 
 fn inspect_epub(path: &Path, fallback: &CatalogBookDto) -> Result<ImportedMetadata> {
+    let validated = validate_new_epub(path)?;
+    for warning in validated.warnings { tracing::warn!(%warning, "EPUB accepted with recoverable structural warning"); }
     let file = File::open(path)?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| AppError::BadRequest(format!("Invalid EPUB archive: {e}")))?;
-    let mut mime = String::new();
-    archive
-        .by_name("mimetype")
-        .map_err(|_| AppError::BadRequest("EPUB has no mimetype file".into()))?
-        .read_to_string(&mut mime)?;
-    if mime.trim() != "application/epub+zip" {
-        return Err(AppError::BadRequest("File is not an EPUB".into()));
-    }
-    let mut container = String::new();
-    archive
-        .by_name("META-INF/container.xml")
-        .map_err(|_| AppError::BadRequest("EPUB has no container.xml".into()))?
-        .read_to_string(&mut container)?;
-    let doc = roxmltree::Document::parse(&container)
-        .map_err(|e| AppError::BadRequest(format!("Invalid EPUB container: {e}")))?;
-    let opf = doc
-        .descendants()
-        .find(|n| n.has_tag_name("rootfile"))
-        .and_then(|n| n.attribute("full-path"))
-        .ok_or_else(|| AppError::BadRequest("EPUB package document is missing".into()))?;
-    let opf_path = opf.to_string();
-    let mut opf_xml = String::new();
-    archive
-        .by_name(&opf_path)
-        .map_err(|_| AppError::BadRequest("EPUB package document cannot be opened".into()))?
-        .read_to_string(&mut opf_xml)?;
+    let opf_path = validated.opf_path;
+    let opf_xml = String::from_utf8(read_validated_entry(path, &opf_path, crate::epub_validation::MAX_XML_BYTES)?)
+        .map_err(|_| AppError::BadRequest("The EPUB has an invalid package document.".into()))?;
     let package = roxmltree::Document::parse(&opf_xml)
         .map_err(|e| AppError::BadRequest(format!("Invalid EPUB package metadata: {e}")))?;
     let texts = |name: &str| {
@@ -811,7 +793,7 @@ fn inspect_epub(path: &Path, fallback: &CatalogBookDto) -> Result<ImportedMetada
     let cover = if let Some(cover_path) = cover_path {
         let mut bytes = Vec::new();
         match archive.by_name(&cover_path) {
-            Ok(mut file) if file.size() <= 10 * 1024 * 1024 => {
+            Ok(mut file) if file.size() <= MAX_RESOURCE_BYTES => {
                 file.read_to_end(&mut bytes)?;
                 Some((cover_extension.into(), bytes))
             }

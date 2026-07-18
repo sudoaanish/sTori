@@ -160,6 +160,7 @@ function EpubReader({ book, appearance, onProgress, onLocation, jumpTo }: { book
   const [ready, setReady] = useState(false);
 
   const applyAppearance = useCallback((document: Document, selected: ReaderAppearance) => {
+    sanitizeEpubDocument(document);
     let style = document.getElementById('stori-reader-appearance') as HTMLStyleElement | null;
     if (!style) {
       style = document.createElement('style');
@@ -185,7 +186,7 @@ function EpubReader({ book, appearance, onProgress, onLocation, jumpTo }: { book
       if (disposed || !host.current) return;
       const epub = ePub(data);
       epubRef.current = epub;
-      const rendition = epub.renderTo(host.current, { width: '100%', height: '100%', flow: 'paginated', spread: 'auto' });
+      const rendition = epub.renderTo(host.current, { width: '100%', height: '100%', flow: 'paginated', spread: 'auto', allowScriptedContent: false });
       renditionRef.current = rendition;
       rendition.hooks.content.register((contents: { document: Document }) => applyAppearance(contents.document, appearanceRef.current));
       await epub.ready;
@@ -212,6 +213,24 @@ function EpubReader({ book, appearance, onProgress, onLocation, jumpTo }: { book
 
   const hostStyle = { '--reader-page-gutter': `${appearance.pageMargin * 2}px` } as CSSProperties;
   return <div className="epub-reader"><button className="page-turn prev" aria-label="Previous page" onClick={() => renditionRef.current?.prev()}><ChevronLeft/></button><div ref={host} className="epub-host" style={hostStyle}/><button className="page-turn next" aria-label="Next page" onClick={() => renditionRef.current?.next()}><ChevronRight/></button>{!ready && <div className="reader-loading">Preparing pages…</div>}</div>;
+}
+
+function sanitizeEpubDocument(document: Document) {
+  document.querySelectorAll('script, iframe, object, embed').forEach((node) => node.remove());
+  document.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    [...element.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim().toLowerCase();
+      if (name.startsWith('on') || value.startsWith('javascript:')) element.removeAttribute(attribute.name);
+      if ((name === 'src' || name === 'href' || name === 'xlink:href') && /^(https?:)?\/\//.test(value)) {
+        if (name === 'src') element.removeAttribute(attribute.name);
+        else element.setAttribute(attribute.name, '#');
+      }
+    });
+  });
+  document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]').forEach((link) => {
+    if (/^(https?:)?\/\//i.test(link.href)) link.remove();
+  });
 }
 
 function PdfReader({ book, onProgress, onLocation, jumpTo }: { book: Book; onProgress: (progress: number) => void; onLocation: (locator: string) => void; jumpTo?: string }) {

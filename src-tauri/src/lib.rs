@@ -1,5 +1,6 @@
 mod db;
 mod downloads;
+mod epub_validation;
 mod error;
 mod models;
 mod scanner;

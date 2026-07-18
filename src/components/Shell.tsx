@@ -1,4 +1,4 @@
-import { BookCopy, Check, Download, DownloadIcon, Home, Library, LoaderCircle, RefreshCw, Search, Settings, Shapes, X } from 'lucide-react';
+import { BookCopy, Check, Download, Home, Library, LoaderCircle, RefreshCw, Search, Settings, Shapes, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { NavLink, Outlet } from 'react-router-dom';
@@ -37,10 +37,6 @@ export function Shell() {
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState('');
   const [activeDownloads, setActiveDownloads] = useState(0);
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'installing' | 'current' | 'failed'>('idle');
-  const [updateMessage, setUpdateMessage] = useState('');
-
-  const isDesktop = isTauri();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -59,52 +55,6 @@ export function Shell() {
   useEffect(() => {
     api.health().then((health) => setVersion(health.version)).catch(() => setVersion('unavailable'));
   }, []);
-
-  const checkForUpdates = async () => {
-    if (!isDesktop) return;
-    setUpdateStatus('checking');
-    setUpdateMessage('Checking for an update…');
-    try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
-      if (!update) {
-        setUpdateStatus('current');
-        setUpdateMessage('sTori is up to date.');
-        return;
-      }
-      setUpdateStatus('available');
-      setUpdateMessage(`sTori v${update.version} is ready to install.`);
-    } catch {
-      setUpdateStatus('failed');
-      setUpdateMessage('Could not check for updates. Try again later.');
-    }
-  };
-
-  const installUpdate = async () => {
-    setUpdateStatus('installing');
-    setUpdateMessage('Downloading and installing the update…');
-    try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
-      if (!update) {
-        setUpdateStatus('current');
-        setUpdateMessage('sTori is already up to date.');
-        return;
-      }
-      await update.downloadAndInstall();
-      const { relaunch } = await import('@tauri-apps/plugin-process');
-      await relaunch();
-    } catch {
-      setUpdateStatus('failed');
-      setUpdateMessage('The update could not be installed. Your current sTori is unchanged.');
-    }
-  };
-
-  useEffect(() => {
-    if (!isDesktop) return;
-    const timer = window.setTimeout(() => { void checkForUpdates(); }, 1800);
-    return () => window.clearTimeout(timer);
-  }, [isDesktop]);
 
   useEffect(() => {
     const desktop = isTauri() || ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -169,12 +119,6 @@ export function Shell() {
                 {scanMessage && <p className="settings-status">{scanMessage}</p>}
               </section>
 
-              {isDesktop && <><div className="settings-divider"/><section>
-                <h3>Updates</h3>
-                <p>Secure updates are downloaded from sTori’s GitHub releases and verified before installation.</p>
-                {updateStatus === 'available' ? <button className="primary-button rescan-button" onClick={installUpdate}><DownloadIcon/>Install update</button> : <button className="secondary-button rescan-button" disabled={updateStatus === 'checking' || updateStatus === 'installing'} onClick={checkForUpdates}>{updateStatus === 'checking' || updateStatus === 'installing' ? <LoaderCircle className="spin"/> : <RefreshCw/>}{updateStatus === 'checking' ? 'Checking…' : updateStatus === 'installing' ? 'Installing…' : 'Check for updates'}</button>}
-                {updateMessage && <p className="settings-status" role="status">{updateMessage}</p>}
-              </section></>}
             </div>
             <footer><span>sTori {version ? `v${version}` : 'version…'}</span><span>Developed by Aanish Farrukh (sudoaanish)</span></footer>
           </section>

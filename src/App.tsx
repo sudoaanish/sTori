@@ -84,7 +84,7 @@ export default function App() {
           <Route path="books/:id" element={<BookDetailPage />} />
           <Route path="collections" element={<CollectionsPage />} />
           <Route path="collections/:kind/:id" element={<CollectionPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings" element={<DesktopOnly><SettingsPage /></DesktopOnly>} />
           <Route path="downloads" element={<DesktopOnly><DownloadsPage /></DesktopOnly>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

@@ -131,7 +131,7 @@ fn show_main_window(app: &tauri::AppHandle) {
 fn get_autostart() -> Result<bool, String> {
     #[cfg(windows)]
     {
-        let output = std::process::Command::new("reg")
+        let output = hidden_windows_command("reg")
             .args([
                 "query",
                 r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
@@ -155,7 +155,7 @@ fn set_autostart(enabled: bool) -> Result<(), String> {
         let status = if enabled {
             let executable = std::env::current_exe()
                 .map_err(|error| format!("Could not locate sTori: {error}"))?;
-            std::process::Command::new("reg")
+            hidden_windows_command("reg")
                 .args([
                     "add",
                     r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
@@ -169,7 +169,7 @@ fn set_autostart(enabled: bool) -> Result<(), String> {
                 ])
                 .status()
         } else {
-            std::process::Command::new("reg")
+            hidden_windows_command("reg")
                 .args([
                     "delete",
                     r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
@@ -193,8 +193,20 @@ fn set_autostart(enabled: bool) -> Result<(), String> {
 }
 
 #[cfg(windows)]
+fn hidden_windows_command(program: &str) -> std::process::Command {
+    use std::os::windows::process::CommandExt;
+
+    // CREATE_NO_WINDOW prevents short-lived console tools such as reg.exe
+    // from flashing a CMD window behind the desktop app.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = std::process::Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(windows)]
 fn port_conflict_detail(port: u16) -> String {
-    let output = std::process::Command::new("netstat")
+    let output = hidden_windows_command("netstat")
         .args(["-ano", "-p", "tcp"])
         .output();
     let pid = output
@@ -210,7 +222,7 @@ fn port_conflict_detail(port: u16) -> String {
             })
         });
     if let Some(pid) = pid {
-        let app = std::process::Command::new("tasklist")
+        let app = hidden_windows_command("tasklist")
             .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
             .output()
             .ok()
